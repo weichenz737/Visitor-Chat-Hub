@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useCreateSession } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageCircle, ArrowRight } from "lucide-react";
+import { MessageCircle, ArrowRight, ShieldCheck } from "lucide-react";
 
 export default function VisitorLanding() {
   const [nickname, setNickname] = useState("");
@@ -101,6 +101,17 @@ export default function VisitorLanding() {
         <p className="text-center text-xs text-muted-foreground mt-6">
           By chatting, you agree to our terms of service.
         </p>
+
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => setLocation("/agent")}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors group"
+            data-testid="link-agent-portal"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
+            客服登录 · Agent Portal
+          </button>
+        </div>
       </div>
     </div>
   );
