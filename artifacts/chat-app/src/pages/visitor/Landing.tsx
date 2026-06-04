@@ -44,9 +44,9 @@ export default function VisitorLanding() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary mb-6">
             <MessageCircle className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground tracking-tight">Customer Support</h1>
+          <h1 className="text-3xl font-bold text-foreground tracking-tight">線上客服</h1>
           <p className="mt-3 text-muted-foreground text-base">
-            We are here to help. Start a conversation with our team.
+            我們隨時為您服務，請開始與客服團隊對話。
           </p>
         </div>
 
@@ -58,8 +58,8 @@ export default function VisitorLanding() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-foreground">Continue previous chat</p>
-                <p className="text-sm text-muted-foreground mt-0.5">as {existingNickname}</p>
+                <p className="text-sm font-medium text-foreground">繼續上次的對話</p>
+                <p className="text-sm text-muted-foreground mt-0.5">以「{existingNickname}」身份繼續</p>
               </div>
               <ArrowRight className="w-4 h-4 text-muted-foreground" />
             </div>
@@ -68,17 +68,17 @@ export default function VisitorLanding() {
 
         <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
           <h2 className="text-sm font-semibold text-foreground mb-4 uppercase tracking-wider">
-            {existingSessionId ? "Start new chat" : "Start a chat"}
+            {existingSessionId ? "開始新的對話" : "開始對話"}
           </h2>
           <div className="space-y-4">
             <div>
               <label htmlFor="nickname" className="block text-sm font-medium text-foreground mb-2">
-                Your name
+                您的姓名
               </label>
               <Input
                 id="nickname"
                 data-testid="input-nickname"
-                placeholder="Enter your name..."
+                placeholder="請輸入您的姓名..."
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -92,14 +92,14 @@ export default function VisitorLanding() {
               onClick={handleStart}
               disabled={!nickname.trim() || createSession.isPending}
             >
-              {createSession.isPending ? "Starting..." : "Start Chat"}
+              {createSession.isPending ? "開始中..." : "開始對話"}
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </div>
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          By chatting, you agree to our terms of service.
+          開始對話即表示您同意我們的服務條款。
         </p>
 
         <div className="mt-6 text-center">
@@ -109,7 +109,7 @@ export default function VisitorLanding() {
             data-testid="link-agent-portal"
           >
             <ShieldCheck className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
-            客服登录 · Agent Portal
+            客服人員登入
           </button>
         </div>
       </div>

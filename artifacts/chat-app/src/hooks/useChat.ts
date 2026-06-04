@@ -17,6 +17,7 @@ interface UseChatOptions {
   agentToken?: string;
   onMessage?: (msg: ChatMessage) => void;
   onSessionUpdate?: (data: unknown) => void;
+  onReadReceipt?: (sessionId: number, readAt: string) => void;
 }
 
 function buildWsUrl(): string {
@@ -25,7 +26,7 @@ function buildWsUrl(): string {
 }
 
 export function useChat(options: UseChatOptions) {
-  const { sessionId, visitorNickname, agentToken, onMessage, onSessionUpdate } = options;
+  const { sessionId, visitorNickname, agentToken, onMessage, onSessionUpdate, onReadReceipt } = options;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -48,14 +49,12 @@ export function useChat(options: UseChatOptions) {
       setIsReconnecting(false);
       reconnectDelayRef.current = 1000;
 
-      // Identify ourselves
       if (sessionId && visitorNickname) {
         ws.send(JSON.stringify({ type: "visitor_connect", sessionId, visitorNickname }));
       } else if (agentToken) {
         ws.send(JSON.stringify({ type: "agent_connect", token: agentToken }));
       }
 
-      // Start heartbeat
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       heartbeatRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -67,6 +66,7 @@ export function useChat(options: UseChatOptions) {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+
         if (data.type === "message" && data.message) {
           const msg = data.message as ChatMessage;
           setMessages((prev) => {
@@ -74,6 +74,20 @@ export function useChat(options: UseChatOptions) {
             return [...prev, msg];
           });
           onMessage?.(msg);
+
+        } else if (data.type === "read_receipt") {
+          // Update all unread messages in this session as read
+          const receiptSessionId = data.sessionId as number;
+          const readAt = data.readAt as string;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.sessionId === receiptSessionId && !m.readAt
+                ? { ...m, readAt }
+                : m
+            )
+          );
+          onReadReceipt?.(receiptSessionId, readAt);
+
         } else if (data.type === "session_update") {
           onSessionUpdate?.(data);
         }
@@ -87,7 +101,6 @@ export function useChat(options: UseChatOptions) {
       setIsConnected(false);
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
 
-      // Reconnect with exponential backoff
       const delay = Math.min(reconnectDelayRef.current, 30000);
       reconnectDelayRef.current = Math.min(delay * 2, 30000);
       setIsReconnecting(true);
@@ -99,7 +112,7 @@ export function useChat(options: UseChatOptions) {
     ws.onerror = () => {
       ws.close();
     };
-  }, [sessionId, visitorNickname, agentToken, onMessage, onSessionUpdate]);
+  }, [sessionId, visitorNickname, agentToken, onMessage, onSessionUpdate, onReadReceipt]);
 
   useEffect(() => {
     mountedRef.current = true;

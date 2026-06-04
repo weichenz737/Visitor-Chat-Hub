@@ -66,6 +66,14 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
   const type = msg.type as string;
 
   if (type === "ping") {
+    // Update lastSeenAt for visitors on each ping to track activity
+    const info = clients.get(ws);
+    if (info?.type === "visitor" && info.sessionId) {
+      await db
+        .update(sessionsTable)
+        .set({ lastSeenAt: new Date() })
+        .where(eq(sessionsTable.id, info.sessionId));
+    }
     safeSend(ws, { type: "pong" });
     return;
   }
@@ -136,10 +144,13 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
 
   if (type === "read") {
     const sessionId = Number(msg.sessionId);
+    const now = new Date();
     await db
       .update(messagesTable)
-      .set({ readAt: new Date() })
+      .set({ readAt: now })
       .where(and(eq(messagesTable.sessionId, sessionId), isNull(messagesTable.readAt)));
+    // Notify visitor their messages were read
+    broadcastToSessionVisitor(sessionId, { type: "read_receipt", sessionId, readAt: now.toISOString() });
     return;
   }
 
@@ -168,6 +179,18 @@ function broadcastToSession(sessionId: number, data: unknown, targetType: "visit
       safeSend(ws, data);
     }
   }
+}
+
+function broadcastToSessionVisitor(sessionId: number, data: unknown): void {
+  for (const [ws, info] of clients) {
+    if (info.type === "visitor" && info.sessionId === sessionId) {
+      safeSend(ws, data);
+    }
+  }
+}
+
+export function broadcastReadReceiptToSession(sessionId: number, readAt: string): void {
+  broadcastToSessionVisitor(sessionId, { type: "read_receipt", sessionId, readAt });
 }
 
 export function getOnlineSessionIds(): Set<number> {

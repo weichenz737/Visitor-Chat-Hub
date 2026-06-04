@@ -26,7 +26,7 @@ export default function AgentLogin() {
           setLocation("/agent/dashboard");
         },
         onError: () => {
-          setError("Invalid username or password");
+          setError("帳號或密碼錯誤，請重試。");
         },
       }
     );
@@ -43,8 +43,8 @@ export default function AgentLogin() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary mb-5">
             <ShieldCheck className="w-7 h-7 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">Agent Portal</h1>
-          <p className="text-muted-foreground text-sm mt-2">Sign in to manage customer conversations</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">客服人員登入</h1>
+          <p className="text-muted-foreground text-sm mt-2">請登入以管理顧客對話</p>
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
@@ -59,12 +59,12 @@ export default function AgentLogin() {
           <div className="space-y-4">
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-foreground mb-2">
-                Username
+                帳號
               </label>
               <Input
                 id="username"
                 data-testid="input-username"
-                placeholder="Enter username"
+                placeholder="請輸入帳號"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -74,14 +74,14 @@ export default function AgentLogin() {
             </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
-                Password
+                密碼
               </label>
               <div className="relative">
                 <Input
                   id="password"
                   data-testid="input-password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Enter password"
+                  placeholder="請輸入密碼"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -102,13 +102,14 @@ export default function AgentLogin() {
               onClick={handleLogin}
               disabled={!username.trim() || !password || agentLogin.isPending}
             >
-              {agentLogin.isPending ? "Signing in..." : "Sign In"}
+              {agentLogin.isPending ? "登入中..." : "登入"}
             </Button>
           </div>
 
           <div className="mt-5 pt-5 border-t border-border">
             <p className="text-xs text-muted-foreground text-center">
-              Default credentials: <span className="font-mono font-medium text-foreground">admin / admin123</span>
+              預設帳號：<span className="font-mono font-medium text-foreground">admin</span>
+              　密碼：<span className="font-mono font-medium text-foreground">admin123</span>
             </p>
           </div>
         </div>

@@ -25,8 +25,11 @@ import {
   WifiOff,
   Circle,
   RefreshCw,
+  Check,
+  CheckCheck,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { zhTW } from "date-fns/locale";
 
 interface SessionSummary {
   id: number;
@@ -40,6 +43,22 @@ interface SessionSummary {
   lastMessageAt: string | null;
 }
 
+function ReadStatus({ message }: { message: ChatMessage }) {
+  if (message.senderType !== "agent") return null;
+  if (message.readAt) {
+    return (
+      <span className="inline-flex items-center ml-1" title="已讀">
+        <CheckCheck className="w-3.5 h-3.5 text-blue-400" />
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center ml-1" title="已送出">
+      <Check className="w-3.5 h-3.5 text-primary-foreground/60" />
+    </span>
+  );
+}
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isAgent = message.senderType === "agent";
   const [showLightbox, setShowLightbox] = useState(false);
@@ -49,7 +68,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       <div className={`flex ${isAgent ? "justify-end" : "justify-start"} mb-3`}>
         <div className={`max-w-[70%] flex flex-col ${isAgent ? "items-end" : "items-start"}`}>
           {!isAgent && (
-            <span className="text-xs text-muted-foreground mb-1 ml-1 font-medium">Visitor</span>
+            <span className="text-xs text-muted-foreground mb-1 ml-1 font-medium">訪客</span>
           )}
           <div
             className={`rounded-2xl px-4 py-2.5 shadow-sm ${
@@ -61,7 +80,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             {message.messageType === "image" && message.imageUrl ? (
               <img
                 src={message.imageUrl}
-                alt="Shared image"
+                alt="共享圖片"
                 className="max-w-full rounded-lg cursor-pointer max-h-40 object-contain"
                 onClick={() => setShowLightbox(true)}
                 data-testid={`img-agent-message-${message.id}`}
@@ -70,12 +89,12 @@ function MessageBubble({ message }: { message: ChatMessage }) {
               <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
             )}
           </div>
-          <span className="text-xs text-muted-foreground mt-1 mx-1">
-            {format(new Date(message.createdAt), "HH:mm")}
-            {message.readAt && isAgent && (
-              <span className="ml-1 text-primary/70">Read</span>
-            )}
-          </span>
+          <div className="flex items-center mt-1 mx-1">
+            <span className="text-xs text-muted-foreground">
+              {format(new Date(message.createdAt), "HH:mm")}
+            </span>
+            {isAgent && <ReadStatus message={message} />}
+          </div>
         </div>
       </div>
 
@@ -84,7 +103,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
           onClick={() => setShowLightbox(false)}
         >
-          <img src={message.imageUrl} alt="Full size" className="max-w-full max-h-full rounded-lg" />
+          <img src={message.imageUrl} alt="原始圖片" className="max-w-full max-h-full rounded-lg" />
         </div>
       )}
     </>
@@ -100,6 +119,12 @@ function SessionListItem({
   isActive: boolean;
   onClick: () => void;
 }) {
+  const statusLabel: Record<string, string> = {
+    waiting: "等待中",
+    active: "進行中",
+    closed: "已結束",
+  };
+
   return (
     <div
       data-testid={`card-session-${session.id}`}
@@ -125,12 +150,12 @@ function SessionListItem({
               <p className="text-sm font-semibold text-foreground truncate">{session.visitorNickname}</p>
               {session.lastMessageAt && (
                 <span className="text-xs text-muted-foreground flex-shrink-0 ml-1">
-                  {formatDistanceToNow(new Date(session.lastMessageAt), { addSuffix: false })}
+                  {formatDistanceToNow(new Date(session.lastMessageAt), { addSuffix: false, locale: zhTW })}
                 </span>
               )}
             </div>
             <p className="text-xs text-muted-foreground truncate mt-0.5">
-              {session.lastMessage ?? "No messages yet"}
+              {session.lastMessage ?? "尚無訊息"}
             </p>
           </div>
         </div>
@@ -153,7 +178,7 @@ function SessionListItem({
                 : "text-muted-foreground"
             }`}
           >
-            {session.status}
+            {statusLabel[session.status] ?? session.status}
           </Badge>
         </div>
       </div>
@@ -171,7 +196,7 @@ export default function AgentDashboard() {
   const { uploadImage, isUploading } = useImageUpload();
 
   const agentToken = localStorage.getItem("agent_token");
-  const agentUsername = localStorage.getItem("agent_username") ?? "Agent";
+  const agentUsername = localStorage.getItem("agent_username") ?? "客服人員";
 
   useEffect(() => {
     if (!agentToken) {
@@ -213,14 +238,12 @@ export default function AgentDashboard() {
   const { messages, isConnected, isReconnecting, sendTextMessage, sendImageMessage, addMessages } =
     useChat({ agentToken: agentToken ?? undefined, onMessage, onSessionUpdate });
 
-  // Load history when session selected
   useEffect(() => {
     if (history) {
       addMessages(history as ChatMessage[]);
     }
   }, [history, addMessages]);
 
-  // Scroll to bottom on session change
   useEffect(() => {
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
   }, [selectedSessionId]);
@@ -284,7 +307,7 @@ export default function AgentDashboard() {
         <div className="px-4 py-4 border-b border-border">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h1 className="font-bold text-foreground">Support Dashboard</h1>
+              <h1 className="font-bold text-foreground">客服工作台</h1>
               <p className="text-xs text-muted-foreground mt-0.5">{agentUsername}</p>
             </div>
             <Button
@@ -298,20 +321,19 @@ export default function AgentDashboard() {
             </Button>
           </div>
 
-          {/* Stats row */}
           {stats && (
             <div className="grid grid-cols-3 gap-2">
               <div className="bg-background rounded-lg px-2 py-1.5 text-center">
                 <p className="text-lg font-bold text-foreground leading-none">{stats.total}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Total</p>
+                <p className="text-xs text-muted-foreground mt-0.5">全部</p>
               </div>
               <div className="bg-background rounded-lg px-2 py-1.5 text-center">
                 <p className="text-lg font-bold text-green-600 leading-none">{stats.online}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Online</p>
+                <p className="text-xs text-muted-foreground mt-0.5">在線</p>
               </div>
               <div className="bg-background rounded-lg px-2 py-1.5 text-center">
                 <p className="text-lg font-bold text-amber-600 leading-none">{stats.unreadTotal}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Unread</p>
+                <p className="text-xs text-muted-foreground mt-0.5">未讀</p>
               </div>
             </div>
           )}
@@ -322,17 +344,17 @@ export default function AgentDashboard() {
           {isReconnecting ? (
             <>
               <RefreshCw className="w-3 h-3 text-amber-500 animate-spin" />
-              <span className="text-xs text-amber-500">Reconnecting...</span>
+              <span className="text-xs text-amber-500">重新連線中...</span>
             </>
           ) : isConnected ? (
             <>
               <Wifi className="w-3 h-3 text-green-500" />
-              <span className="text-xs text-green-500">Live</span>
+              <span className="text-xs text-green-500">即時連線中</span>
             </>
           ) : (
             <>
               <WifiOff className="w-3 h-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Offline</span>
+              <span className="text-xs text-muted-foreground">未連線</span>
             </>
           )}
         </div>
@@ -348,8 +370,8 @@ export default function AgentDashboard() {
           ) : (sessions as SessionSummary[]).length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full p-6 text-center">
               <Users className="w-8 h-8 text-muted-foreground/50 mb-3" />
-              <p className="text-sm font-medium text-muted-foreground">No visitors yet</p>
-              <p className="text-xs text-muted-foreground/70 mt-1">Sessions will appear here</p>
+              <p className="text-sm font-medium text-muted-foreground">目前沒有訪客</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">新對話將會顯示在此</p>
             </div>
           ) : (
             (sessions as SessionSummary[]).map((session) => (
@@ -371,9 +393,9 @@ export default function AgentDashboard() {
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
               <MessageSquare className="w-8 h-8 text-primary/60" />
             </div>
-            <h2 className="text-xl font-semibold text-foreground">Select a conversation</h2>
+            <h2 className="text-xl font-semibold text-foreground">選擇一個對話</h2>
             <p className="text-muted-foreground text-sm mt-2 max-w-xs">
-              Choose a visitor from the list to start responding to their messages.
+              從左側清單選擇訪客，開始回覆對話。
             </p>
           </div>
         ) : (
@@ -392,7 +414,7 @@ export default function AgentDashboard() {
               </div>
               <div>
                 <h2 className="font-semibold text-foreground">
-                  {selectedSession?.visitorNickname ?? "Visitor"}
+                  {selectedSession?.visitorNickname ?? "訪客"}
                 </h2>
                 <div className="flex items-center gap-1.5">
                   <Circle
@@ -402,14 +424,14 @@ export default function AgentDashboard() {
                   />
                   <span className="text-xs text-muted-foreground">
                     {selectedSession?.isOnline
-                      ? "Online"
+                      ? "在線（1分鐘內活躍）"
                       : selectedSession?.lastSeenAt
-                      ? `Last seen ${formatDistanceToNow(new Date(selectedSession.lastSeenAt), { addSuffix: true })}`
-                      : "Offline"}
+                      ? `最後上線 ${formatDistanceToNow(new Date(selectedSession.lastSeenAt), { addSuffix: true, locale: zhTW })}`
+                      : "離線"}
                   </span>
                 </div>
               </div>
-              <div className="ml-auto">
+              <div className="ml-auto flex items-center gap-2">
                 <Badge
                   variant="outline"
                   className={`${
@@ -420,7 +442,11 @@ export default function AgentDashboard() {
                       : "text-muted-foreground"
                   }`}
                 >
-                  {selectedSession?.status}
+                  {selectedSession?.status === "active"
+                    ? "進行中"
+                    : selectedSession?.status === "waiting"
+                    ? "等待中"
+                    : "已結束"}
                 </Badge>
               </div>
             </div>
@@ -431,7 +457,7 @@ export default function AgentDashboard() {
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
                     <MessageSquare className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-                    <p className="text-sm text-muted-foreground">No messages yet</p>
+                    <p className="text-sm text-muted-foreground">尚無訊息</p>
                   </div>
                 </div>
               ) : (
@@ -463,7 +489,7 @@ export default function AgentDashboard() {
                 </button>
                 <Textarea
                   data-testid="input-agent-message"
-                  placeholder={`Reply to ${selectedSession?.visitorNickname ?? "visitor"}...`}
+                  placeholder={`回覆 ${selectedSession?.visitorNickname ?? "訪客"}...`}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   onKeyDown={handleKeyDown}

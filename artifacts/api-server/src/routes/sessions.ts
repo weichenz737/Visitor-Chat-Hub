@@ -8,9 +8,16 @@ import {
   GetSessionMessagesParams,
   MarkSessionReadParams,
 } from "@workspace/api-zod";
-import { getOnlineSessionIds } from "../lib/websocket";
+import { getOnlineSessionIds, broadcastReadReceiptToSession } from "../lib/websocket";
 
 const router: IRouter = Router();
+
+const ONE_MINUTE_MS = 60 * 1000;
+
+function isActiveWithinOneMinute(lastSeenAt: Date | null): boolean {
+  if (!lastSeenAt) return false;
+  return Date.now() - new Date(lastSeenAt).getTime() < ONE_MINUTE_MS;
+}
 
 router.post("/sessions", async (req, res): Promise<void> => {
   const parsed = CreateSessionBody.safeParse(req.body);
@@ -83,7 +90,8 @@ router.get("/sessions", async (req, res): Promise<void> => {
     lastSeenAt: s.lastSeenAt,
     agentId: s.agentId,
     unreadCount: unreadMap.get(s.id) ?? 0,
-    isOnline: onlineIds.has(s.id),
+    // Online = WS currently connected OR lastSeenAt within 1 minute
+    isOnline: onlineIds.has(s.id) || isActiveWithinOneMinute(s.lastSeenAt),
     lastMessage: lastMsgMap.get(s.id)?.content ?? null,
     lastMessageAt: lastMsgMap.get(s.id)?.createdAt ?? null,
   }));
@@ -94,9 +102,14 @@ router.get("/sessions", async (req, res): Promise<void> => {
 router.get("/sessions/stats", async (_req, res): Promise<void> => {
   const onlineIds = getOnlineSessionIds();
 
-  const allSessions = await db.select({ id: sessionsTable.id, status: sessionsTable.status }).from(sessionsTable);
+  const allSessions = await db
+    .select({ id: sessionsTable.id, status: sessionsTable.status, lastSeenAt: sessionsTable.lastSeenAt })
+    .from(sessionsTable);
+
   const total = allSessions.length;
-  const online = allSessions.filter((s) => onlineIds.has(s.id)).length;
+  const online = allSessions.filter(
+    (s) => onlineIds.has(s.id) || isActiveWithinOneMinute(s.lastSeenAt)
+  ).length;
   const waiting = allSessions.filter((s) => s.status === "waiting").length;
   const active = allSessions.filter((s) => s.status === "active").length;
 
@@ -157,9 +170,10 @@ router.post("/sessions/:id/read", async (req, res): Promise<void> => {
     return;
   }
 
+  const now = new Date();
   const result = await db
     .update(messagesTable)
-    .set({ readAt: new Date() })
+    .set({ readAt: now })
     .where(
       and(
         eq(messagesTable.sessionId, params.data.id),
@@ -168,6 +182,11 @@ router.post("/sessions/:id/read", async (req, res): Promise<void> => {
       )
     )
     .returning();
+
+  // Notify visitor their messages were read
+  if (result.length > 0) {
+    broadcastReadReceiptToSession(params.data.id, now.toISOString());
+  }
 
   res.json({ count: result.length });
 });
