@@ -24,7 +24,7 @@ function ReadStatus({ message }: { message: ChatMessage }) {
   );
 }
 
-function MessageBubble({ message, isOwn }: { message: ChatMessage; isOwn: boolean }) {
+function MessageBubble({ message, isOwn, agentName }: { message: ChatMessage; isOwn: boolean; agentName: string }) {
   const [showLightbox, setShowLightbox] = useState(false);
 
   return (
@@ -32,7 +32,7 @@ function MessageBubble({ message, isOwn }: { message: ChatMessage; isOwn: boolea
       <div className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-3`}>
         <div className={`max-w-[75%] ${isOwn ? "items-end" : "items-start"} flex flex-col`}>
           {!isOwn && (
-            <span className="text-xs text-muted-foreground mb-1 ml-1 font-medium">客服</span>
+            <span className="text-xs text-muted-foreground mb-1 ml-1 font-medium">{agentName}</span>
           )}
           <div
             className={`rounded-2xl px-4 py-2.5 shadow-sm ${
@@ -67,11 +67,7 @@ function MessageBubble({ message, isOwn }: { message: ChatMessage; isOwn: boolea
           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
           onClick={() => setShowLightbox(false)}
         >
-          <img
-            src={message.imageUrl}
-            alt="原始圖片"
-            className="max-w-full max-h-full rounded-lg"
-          />
+          <img src={message.imageUrl} alt="原始圖片" className="max-w-full max-h-full rounded-lg" />
         </div>
       )}
     </>
@@ -82,6 +78,7 @@ export default function VisitorChat() {
   const [, setLocation] = useLocation();
   const sessionId = Number(sessionStorage.getItem("sessionId") ?? "0");
   const visitorNickname = sessionStorage.getItem("visitorNickname") ?? "";
+  const agentName = sessionStorage.getItem("agentName") ?? "客服";
   const [inputText, setInputText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -136,7 +133,7 @@ export default function VisitorChat() {
     e.target.value = "";
   };
 
-  const handleNewChat = () => {
+  const handleBack = () => {
     sessionStorage.clear();
     setLocation("/");
   };
@@ -147,13 +144,13 @@ export default function VisitorChat() {
       <div className="flex items-center gap-3 px-4 py-3 bg-card border-b border-border shadow-sm">
         <button
           data-testid="button-back"
-          onClick={handleNewChat}
+          onClick={handleBack}
           className="p-2 rounded-lg hover:bg-accent/50 transition-colors text-muted-foreground"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1">
-          <h1 className="font-semibold text-foreground text-sm">線上客服</h1>
+          <h1 className="font-semibold text-foreground text-sm">{agentName}</h1>
           <div className="flex items-center gap-1.5 mt-0.5">
             {isReconnecting ? (
               <>
@@ -188,7 +185,7 @@ export default function VisitorChat() {
                 <Send className="w-5 h-5 text-primary" />
               </div>
               <p className="text-sm font-medium text-foreground">開始對話</p>
-              <p className="text-xs text-muted-foreground mt-1">客服人員將盡快回覆您</p>
+              <p className="text-xs text-muted-foreground mt-1">{agentName} 將盡快回覆您</p>
             </div>
           </div>
         )}
@@ -197,6 +194,7 @@ export default function VisitorChat() {
             key={msg.id}
             message={msg}
             isOwn={msg.senderType === "visitor"}
+            agentName={agentName}
           />
         ))}
         <div ref={messagesEndRef} />

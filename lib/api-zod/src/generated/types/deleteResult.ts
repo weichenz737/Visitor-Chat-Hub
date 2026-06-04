@@ -6,9 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface SessionInput {
-  /** @minLength 1 */
-  visitorNickname: string;
-  /** @nullable */
-  agentId?: number | null;
+export interface DeleteResult {
+  success: boolean;
 }

@@ -8,6 +8,22 @@ import { AgentLoginBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+// Public: list active agents for visitor selection
+router.get("/agents", async (_req, res): Promise<void> => {
+  const agents = await db
+    .select({
+      id: agentsTable.id,
+      displayName: agentsTable.displayName,
+      avatarUrl: agentsTable.avatarUrl,
+      introduction: agentsTable.introduction,
+    })
+    .from(agentsTable)
+    .where(eq(agentsTable.isActive, true))
+    .orderBy(agentsTable.createdAt);
+
+  res.json(agents);
+});
+
 router.post("/agent/login", async (req, res): Promise<void> => {
   const parsed = AgentLoginBody.safeParse(req.body);
   if (!parsed.success) {

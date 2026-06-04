@@ -16,6 +16,8 @@ tags:
     description: Message operations
   - name: agent
     description: Agent operations
+  - name: admin
+    description: Admin management operations
   - name: upload
     description: File upload operations
 paths:
@@ -158,6 +160,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Message"
 
+  /agents:
+    get:
+      operationId: listPublicAgents
+      tags: [agent]
+      summary: List all active agents (public, for visitor selection)
+      responses:
+        "200":
+          description: Active agents list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentPublic"
+
   /agent/login:
     post:
       operationId: agentLogin
@@ -193,6 +210,96 @@ paths:
                 $ref: "#/components/schemas/AgentInfo"
         "401":
           description: Not authenticated
+
+  /admin/agents:
+    get:
+      operationId: adminListAgents
+      tags: [admin]
+      summary: List all agents (admin)
+      responses:
+        "200":
+          description: All agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminAgent"
+        "401":
+          description: Not authenticated
+    post:
+      operationId: adminCreateAgent
+      tags: [admin]
+      summary: Create a new agent (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentBody"
+      responses:
+        "201":
+          description: Agent created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAgent"
+        "400":
+          description: Validation error
+        "401":
+          description: Not authenticated
+        "409":
+          description: Username already taken
+
+  /admin/agents/{id}:
+    patch:
+      operationId: adminUpdateAgent
+      tags: [admin]
+      summary: Update agent profile (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgentBody"
+      responses:
+        "200":
+          description: Updated agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAgent"
+        "401":
+          description: Not authenticated
+        "404":
+          description: Not found
+    delete:
+      operationId: adminDeleteAgent
+      tags: [admin]
+      summary: Delete an agent (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResult"
+        "401":
+          description: Not authenticated
+        "404":
+          description: Not found
 
 
 components:
@@ -274,6 +381,8 @@ components:
         visitorNickname:
           type: string
           minLength: 1
+        agentId:
+          type: ["integer", "null"]
 
     Message:
       type: object
@@ -324,6 +433,13 @@ components:
         count:
           type: integer
 
+    DeleteResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+
     AgentCredentials:
       type: object
       required: [username, password]
@@ -352,6 +468,73 @@ components:
           type: integer
         username:
           type: string
+
+    AgentPublic:
+      type: object
+      required: [id, displayName]
+      properties:
+        id:
+          type: integer
+        displayName:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        introduction:
+          type: ["string", "null"]
+
+    AdminAgent:
+      type: object
+      required: [id, username, displayName, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        introduction:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateAgentBody:
+      type: object
+      required: [username, password, displayName]
+      properties:
+        username:
+          type: string
+          minLength: 3
+        password:
+          type: string
+          minLength: 6
+        displayName:
+          type: string
+          minLength: 1
+        introduction:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+
+    UpdateAgentBody:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+        introduction:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        password:
+          type: ["string", "null"]
+          minLength: 6
 
     UploadResult:
       type: object

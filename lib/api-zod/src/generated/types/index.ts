@@ -6,9 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adminAgent';
 export * from './agentCredentials';
 export * from './agentInfo';
+export * from './agentPublic';
 export * from './agentSession';
+export * from './createAgentBody';
+export * from './deleteResult';
 export * from './healthStatus';
 export * from './message';
 export * from './messageInput';
@@ -23,4 +27,5 @@ export * from './sessionStats';
 export * from './sessionStatus';
 export * from './sessionSummary';
 export * from './sessionSummaryStatus';
+export * from './updateAgentBody';
 export * from './uploadResult';

@@ -64,6 +64,8 @@ export interface SessionStats {
 export interface SessionInput {
   /** @minLength 1 */
   visitorNickname: string;
+  /** @nullable */
+  agentId?: number | null;
 }
 
 export type MessageSenderType = typeof MessageSenderType[keyof typeof MessageSenderType];
@@ -124,6 +126,10 @@ export interface ReadResult {
   count: number;
 }
 
+export interface DeleteResult {
+  success: boolean;
+}
+
 export interface AgentCredentials {
   username: string;
   password: string;
@@ -138,6 +144,55 @@ export interface AgentSession {
 export interface AgentInfo {
   agentId: number;
   username: string;
+}
+
+export interface AgentPublic {
+  id: number;
+  displayName: string;
+  /** @nullable */
+  avatarUrl?: string | null;
+  /** @nullable */
+  introduction?: string | null;
+}
+
+export interface AdminAgent {
+  id: number;
+  username: string;
+  displayName: string;
+  /** @nullable */
+  avatarUrl?: string | null;
+  /** @nullable */
+  introduction?: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface CreateAgentBody {
+  /** @minLength 3 */
+  username: string;
+  /** @minLength 6 */
+  password: string;
+  /** @minLength 1 */
+  displayName: string;
+  /** @nullable */
+  introduction?: string | null;
+  /** @nullable */
+  avatarUrl?: string | null;
+}
+
+export interface UpdateAgentBody {
+  /** @minLength 1 */
+  displayName?: string;
+  /** @nullable */
+  introduction?: string | null;
+  /** @nullable */
+  avatarUrl?: string | null;
+  isActive?: boolean;
+  /**
+     * @minLength 6
+     * @nullable
+     */
+  password?: string | null;
 }
 
 export interface UploadResult {

@@ -24,7 +24,8 @@ export const HealthCheckResponse = zod.object({
 
 
 export const CreateSessionBody = zod.object({
-  "visitorNickname": zod.string().min(1)
+  "visitorNickname": zod.string().min(1),
+  "agentId": zod.number().nullish()
 })
 
 
@@ -119,6 +120,18 @@ export const SendMessageBody = zod.object({
 
 
 /**
+ * @summary List all active agents (public, for visitor selection)
+ */
+export const ListPublicAgentsResponseItem = zod.object({
+  "id": zod.number(),
+  "displayName": zod.string(),
+  "avatarUrl": zod.string().nullish(),
+  "introduction": zod.string().nullish()
+})
+export const ListPublicAgentsResponse = zod.array(ListPublicAgentsResponseItem)
+
+
+/**
  * @summary Agent login
  */
 export const AgentLoginBody = zod.object({
@@ -139,6 +152,83 @@ export const AgentLoginResponse = zod.object({
 export const GetAgentMeResponse = zod.object({
   "agentId": zod.number(),
   "username": zod.string()
+})
+
+
+/**
+ * @summary List all agents (admin)
+ */
+export const AdminListAgentsResponseItem = zod.object({
+  "id": zod.number(),
+  "username": zod.string(),
+  "displayName": zod.string(),
+  "avatarUrl": zod.string().nullish(),
+  "introduction": zod.string().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const AdminListAgentsResponse = zod.array(AdminListAgentsResponseItem)
+
+
+/**
+ * @summary Create a new agent (admin)
+ */
+export const adminCreateAgentBodyUsernameMin = 3;
+
+export const adminCreateAgentBodyPasswordMin = 6;
+
+
+
+
+export const AdminCreateAgentBody = zod.object({
+  "username": zod.string().min(adminCreateAgentBodyUsernameMin),
+  "password": zod.string().min(adminCreateAgentBodyPasswordMin),
+  "displayName": zod.string().min(1),
+  "introduction": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish()
+})
+
+
+/**
+ * @summary Update agent profile (admin)
+ */
+export const AdminUpdateAgentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const adminUpdateAgentBodyPasswordMin = 6;
+
+
+
+export const AdminUpdateAgentBody = zod.object({
+  "displayName": zod.string().min(1).optional(),
+  "introduction": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "isActive": zod.boolean().optional(),
+  "password": zod.string().min(adminUpdateAgentBodyPasswordMin).nullish()
+})
+
+export const AdminUpdateAgentResponse = zod.object({
+  "id": zod.number(),
+  "username": zod.string(),
+  "displayName": zod.string(),
+  "avatarUrl": zod.string().nullish(),
+  "introduction": zod.string().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete an agent (admin)
+ */
+export const AdminDeleteAgentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AdminDeleteAgentResponse = zod.object({
+  "success": zod.boolean()
 })
 
 

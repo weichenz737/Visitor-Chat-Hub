@@ -1,0 +1,2 @@
+- [Multi-agent feature](multi-agent.md) — agents table has displayName/avatarUrl/introduction/isActive; admin CRUD at /admin/agents (JWT-protected); visitor picks agent at root `/`
+- [Auth helper pattern](auth-pattern.md) — verifyToken/signToken live in api-server/src/lib/auth.ts; requireAuth inline helper used in admin.ts returns agentId or null and sends 401 directly

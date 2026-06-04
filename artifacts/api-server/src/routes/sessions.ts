@@ -28,7 +28,10 @@ router.post("/sessions", async (req, res): Promise<void> => {
 
   const [session] = await db
     .insert(sessionsTable)
-    .values({ visitorNickname: parsed.data.visitorNickname })
+    .values({
+      visitorNickname: parsed.data.visitorNickname,
+      agentId: parsed.data.agentId ?? undefined,
+    })
     .returning();
 
   res.status(201).json(session);
