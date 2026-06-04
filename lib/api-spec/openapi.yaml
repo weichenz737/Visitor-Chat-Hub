@@ -3,13 +3,21 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Customer service chat system API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: sessions
+    description: Chat session operations
+  - name: messages
+    description: Message operations
+  - name: agent
+    description: Agent operations
+  - name: upload
+    description: File upload operations
 paths:
   /healthz:
     get:
@@ -24,6 +32,169 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /sessions:
+    post:
+      operationId: createSession
+      tags: [sessions]
+      summary: Create a new visitor session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionInput"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+    get:
+      operationId: listSessions
+      tags: [sessions]
+      summary: List all sessions (agent use)
+      responses:
+        "200":
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SessionSummary"
+
+  /sessions/stats:
+    get:
+      operationId: getSessionStats
+      tags: [sessions]
+      summary: Get session statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionStats"
+
+  /sessions/{id}:
+    get:
+      operationId: getSession
+      tags: [sessions]
+      summary: Get session by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          description: Not found
+
+  /sessions/{id}/messages:
+    get:
+      operationId: getSessionMessages
+      tags: [messages]
+      summary: Get all messages for a session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+
+  /sessions/{id}/read:
+    post:
+      operationId: markSessionRead
+      tags: [sessions]
+      summary: Mark all messages in session as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadResult"
+
+  /messages:
+    post:
+      operationId: sendMessage
+      tags: [messages]
+      summary: Send a message (REST fallback)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageInput"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
+  /agent/login:
+    post:
+      operationId: agentLogin
+      tags: [agent]
+      summary: Agent login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentCredentials"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSession"
+        "401":
+          description: Invalid credentials
+
+  /agent/me:
+    get:
+      operationId: getAgentMe
+      tags: [agent]
+      summary: Get current agent info
+      responses:
+        "200":
+          description: Agent info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentInfo"
+        "401":
+          description: Not authenticated
+
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +205,159 @@ components:
       required:
         - status
 
+    Session:
+      type: object
+      required: [id, visitorNickname, status, createdAt]
+      properties:
+        id:
+          type: integer
+        visitorNickname:
+          type: string
+        status:
+          type: string
+          enum: [waiting, active, closed]
+        createdAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: ["string", "null"]
+          format: date-time
+        agentId:
+          type: ["integer", "null"]
+
+    SessionSummary:
+      type: object
+      required: [id, visitorNickname, status, createdAt, unreadCount, isOnline]
+      properties:
+        id:
+          type: integer
+        visitorNickname:
+          type: string
+        status:
+          type: string
+          enum: [waiting, active, closed]
+        createdAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: ["string", "null"]
+          format: date-time
+        unreadCount:
+          type: integer
+        isOnline:
+          type: boolean
+        lastMessage:
+          type: ["string", "null"]
+        lastMessageAt:
+          type: ["string", "null"]
+          format: date-time
+
+    SessionStats:
+      type: object
+      required: [total, online, waiting, active, unreadTotal]
+      properties:
+        total:
+          type: integer
+        online:
+          type: integer
+        waiting:
+          type: integer
+        active:
+          type: integer
+        unreadTotal:
+          type: integer
+
+    SessionInput:
+      type: object
+      required: [visitorNickname]
+      properties:
+        visitorNickname:
+          type: string
+          minLength: 1
+
+    Message:
+      type: object
+      required: [id, sessionId, senderType, messageType, content, createdAt]
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        senderType:
+          type: string
+          enum: [visitor, agent]
+        messageType:
+          type: string
+          enum: [text, image]
+        content:
+          type: string
+        imageUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: ["string", "null"]
+          format: date-time
+
+    MessageInput:
+      type: object
+      required: [sessionId, senderType, messageType, content]
+      properties:
+        sessionId:
+          type: integer
+        senderType:
+          type: string
+          enum: [visitor, agent]
+        messageType:
+          type: string
+          enum: [text, image]
+        content:
+          type: string
+        imageUrl:
+          type: ["string", "null"]
+
+    ReadResult:
+      type: object
+      required: [count]
+      properties:
+        count:
+          type: integer
+
+    AgentCredentials:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    AgentSession:
+      type: object
+      required: [token, agentId, username]
+      properties:
+        token:
+          type: string
+        agentId:
+          type: integer
+        username:
+          type: string
+
+    AgentInfo:
+      type: object
+      required: [agentId, username]
+      properties:
+        agentId:
+          type: integer
+        username:
+          type: string
+
+    UploadResult:
+      type: object
+      required: [url, filename]
+      properties:
+        url:
+          type: string
+        filename:
+          type: string
