@@ -5,16 +5,17 @@ import {
   useCreateSession,
   getListPublicAgentsQueryKey,
 } from "@workspace/api-client-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { MessageCircle, ArrowRight, ShieldCheck } from "lucide-react";
+import { MessageCircle, ArrowRight, ShieldCheck, Loader2 } from "lucide-react";
+
+const ADJECTIVES = ["快樂", "友善", "活潑", "溫柔", "聰明", "勇敢", "開朗", "細心", "熱情", "耐心"];
+const NOUNS = ["小貓", "小狗", "兔子", "熊貓", "企鵝", "海豚", "獅子", "老虎", "狐狸", "鸚鵡"];
+
+function generateNickname(): string {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  const num = Math.floor(Math.random() * 900) + 100;
+  return `${adj}${noun}${num}`;
+}
 
 interface AgentPublic {
   id: number;
@@ -23,12 +24,12 @@ interface AgentPublic {
   introduction?: string | null;
 }
 
-function AgentCard({ agent, onClick }: { agent: AgentPublic; onClick: () => void }) {
+function AgentCard({ agent, onClick, loading }: { agent: AgentPublic; onClick: () => void; loading?: boolean }) {
   return (
     <div
       data-testid={`card-agent-${agent.id}`}
-      onClick={onClick}
-      className="group relative flex flex-col rounded-2xl overflow-hidden border border-border bg-card cursor-pointer hover:shadow-lg hover:border-primary/40 transition-all duration-200"
+      onClick={loading ? undefined : onClick}
+      className={`group relative flex flex-col rounded-2xl overflow-hidden border border-border bg-card transition-all duration-200 ${loading ? "opacity-70 cursor-wait" : "cursor-pointer hover:shadow-lg hover:border-primary/40"}`}
     >
       {/* Photo area — tall, fills most of the card */}
       <div className="relative w-full aspect-[3/4] bg-muted overflow-hidden">
@@ -51,6 +52,13 @@ function AgentCard({ agent, onClick }: { agent: AgentPublic; onClick: () => void
           <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
           <span className="text-xs font-medium text-green-700">在線</span>
         </div>
+
+        {/* Loading overlay */}
+        {loading && (
+          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          </div>
+        )}
       </div>
 
       {/* Info area — compact footer */}
@@ -61,7 +69,7 @@ function AgentCard({ agent, onClick }: { agent: AgentPublic; onClick: () => void
             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{agent.introduction}</p>
           )}
         </div>
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary transition-colors">
           <ArrowRight className="w-4 h-4 text-primary group-hover:text-primary-foreground transition-colors" />
         </div>
       </div>
@@ -71,9 +79,7 @@ function AgentCard({ agent, onClick }: { agent: AgentPublic; onClick: () => void
 
 export default function VisitorAgentList() {
   const [, setLocation] = useLocation();
-  const [selectedAgent, setSelectedAgent] = useState<AgentPublic | null>(null);
-  const [nickname, setNickname] = useState("");
-  const [open, setOpen] = useState(false);
+  const [loadingAgentId, setLoadingAgentId] = useState<number | null>(null);
   const createSession = useCreateSession();
 
   const { data: agents = [], isLoading } = useListPublicAgents({
@@ -81,31 +87,24 @@ export default function VisitorAgentList() {
   });
 
   const handleSelectAgent = (agent: AgentPublic) => {
-    setSelectedAgent(agent);
-    setNickname("");
-    setOpen(true);
-  };
-
-  const handleStart = () => {
-    const name = nickname.trim();
-    if (!name || !selectedAgent) return;
+    if (loadingAgentId !== null) return;
+    const nickname = generateNickname();
+    setLoadingAgentId(agent.id);
     createSession.mutate(
-      { data: { visitorNickname: name, agentId: selectedAgent.id } },
+      { data: { visitorNickname: nickname, agentId: agent.id } },
       {
         onSuccess: (session) => {
           sessionStorage.setItem("sessionId", String(session.id));
-          sessionStorage.setItem("visitorNickname", name);
-          sessionStorage.setItem("agentId", String(selectedAgent.id));
-          sessionStorage.setItem("agentName", selectedAgent.displayName);
-          setOpen(false);
+          sessionStorage.setItem("visitorNickname", nickname);
+          sessionStorage.setItem("agentId", String(agent.id));
+          sessionStorage.setItem("agentName", agent.displayName);
           setLocation("/chat");
+        },
+        onError: () => {
+          setLoadingAgentId(null);
         },
       }
     );
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleStart();
   };
 
   return (
@@ -141,7 +140,12 @@ export default function VisitorAgentList() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {(agents as AgentPublic[]).map((agent) => (
-              <AgentCard key={agent.id} agent={agent} onClick={() => handleSelectAgent(agent)} />
+              <AgentCard
+                key={agent.id}
+                agent={agent}
+                onClick={() => handleSelectAgent(agent)}
+                loading={loadingAgentId === agent.id}
+              />
             ))}
           </div>
         )}
@@ -157,60 +161,6 @@ export default function VisitorAgentList() {
           </button>
         </div>
       </div>
-
-      {/* Name Entry Dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            {selectedAgent && (
-              <div className="flex items-center gap-3 mb-1">
-                <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-primary/10 flex items-center justify-center">
-                  {selectedAgent.avatarUrl ? (
-                    <img
-                      src={selectedAgent.avatarUrl}
-                      alt={selectedAgent.displayName}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-lg font-bold text-primary">
-                      {selectedAgent.displayName.charAt(0)}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <DialogTitle className="text-base">{selectedAgent.displayName}</DialogTitle>
-                  <DialogDescription className="text-xs mt-0.5">
-                    請輸入您的姓名以開始對話
-                  </DialogDescription>
-                </div>
-              </div>
-            )}
-          </DialogHeader>
-          <div className="space-y-4 pt-1">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">您的姓名</label>
-              <Input
-                data-testid="input-nickname-dialog"
-                placeholder="請輸入您的姓名..."
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                onKeyDown={handleKeyDown}
-                autoFocus
-                className="h-11"
-              />
-            </div>
-            <Button
-              data-testid="button-start-chat-dialog"
-              className="w-full h-11 font-semibold"
-              onClick={handleStart}
-              disabled={!nickname.trim() || createSession.isPending}
-            >
-              {createSession.isPending ? "開始中..." : "開始對話"}
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
