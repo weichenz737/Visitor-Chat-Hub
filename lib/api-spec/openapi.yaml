@@ -67,6 +67,32 @@ paths:
                 items:
                   $ref: "#/components/schemas/SessionSummary"
 
+  /sessions/visitor-resume:
+    get:
+      operationId: visitorResumeSession
+      tags: [sessions]
+      summary: Find most recent session for a visitor+agent pair
+      parameters:
+        - name: visitorId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: agentId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Existing session found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          description: No existing session
+
   /sessions/stats:
     get:
       operationId: getSessionStats
@@ -320,6 +346,8 @@ components:
           type: integer
         visitorNickname:
           type: string
+        visitorId:
+          type: ["string", "null"]
         status:
           type: string
           enum: [waiting, active, closed]
@@ -383,6 +411,8 @@ components:
           minLength: 1
         agentId:
           type: ["integer", "null"]
+        visitorId:
+          type: ["string", "null"]
 
     Message:
       type: object

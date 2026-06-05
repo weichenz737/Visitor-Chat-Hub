@@ -35,7 +35,8 @@ import type {
   SessionInput,
   SessionStats,
   SessionSummary,
-  UpdateAgentBody
+  UpdateAgentBody,
+  VisitorResumeSessionParams
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -264,6 +265,90 @@ export function useListSessions<TData = Awaited<ReturnType<typeof listSessions>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListSessionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getVisitorResumeSessionUrl = (params: VisitorResumeSessionParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/sessions/visitor-resume?${stringifiedParams}` : `/api/sessions/visitor-resume`
+}
+
+/**
+ * @summary Find most recent session for a visitor+agent pair
+ */
+export const visitorResumeSession = async (params: VisitorResumeSessionParams, options?: RequestInit): Promise<Session> => {
+
+  return customFetch<Session>(getVisitorResumeSessionUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getVisitorResumeSessionQueryKey = (params?: VisitorResumeSessionParams,) => {
+    return [
+    `/api/sessions/visitor-resume`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getVisitorResumeSessionQueryOptions = <TData = Awaited<ReturnType<typeof visitorResumeSession>>, TError = ErrorType<void>>(params: VisitorResumeSessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof visitorResumeSession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getVisitorResumeSessionQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof visitorResumeSession>>> = ({ signal }) => visitorResumeSession(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof visitorResumeSession>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type VisitorResumeSessionQueryResult = NonNullable<Awaited<ReturnType<typeof visitorResumeSession>>>
+export type VisitorResumeSessionQueryError = ErrorType<void>
+
+
+/**
+ * @summary Find most recent session for a visitor+agent pair
+ */
+
+export function useVisitorResumeSession<TData = Awaited<ReturnType<typeof visitorResumeSession>>, TError = ErrorType<void>>(
+ params: VisitorResumeSessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof visitorResumeSession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getVisitorResumeSessionQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

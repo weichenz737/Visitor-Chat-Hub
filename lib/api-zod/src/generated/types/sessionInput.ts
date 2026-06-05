@@ -11,4 +11,6 @@ export interface SessionInput {
   visitorNickname: string;
   /** @nullable */
   agentId?: number | null;
+  /** @nullable */
+  visitorId?: string | null;
 }

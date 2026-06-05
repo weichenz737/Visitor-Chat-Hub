@@ -25,7 +25,8 @@ export const HealthCheckResponse = zod.object({
 
 export const CreateSessionBody = zod.object({
   "visitorNickname": zod.string().min(1),
-  "agentId": zod.number().nullish()
+  "agentId": zod.number().nullish(),
+  "visitorId": zod.string().nullish()
 })
 
 
@@ -44,6 +45,25 @@ export const ListSessionsResponseItem = zod.object({
   "lastMessageAt": zod.coerce.date().nullish()
 })
 export const ListSessionsResponse = zod.array(ListSessionsResponseItem)
+
+
+/**
+ * @summary Find most recent session for a visitor+agent pair
+ */
+export const VisitorResumeSessionQueryParams = zod.object({
+  "visitorId": zod.coerce.string(),
+  "agentId": zod.coerce.number()
+})
+
+export const VisitorResumeSessionResponse = zod.object({
+  "id": zod.number(),
+  "visitorNickname": zod.string(),
+  "visitorId": zod.string().nullish(),
+  "status": zod.enum(['waiting', 'active', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "lastSeenAt": zod.coerce.date().nullish(),
+  "agentId": zod.number().nullish()
+})
 
 
 /**
@@ -68,6 +88,7 @@ export const GetSessionParams = zod.object({
 export const GetSessionResponse = zod.object({
   "id": zod.number(),
   "visitorNickname": zod.string(),
+  "visitorId": zod.string().nullish(),
   "status": zod.enum(['waiting', 'active', 'closed']),
   "createdAt": zod.coerce.date(),
   "lastSeenAt": zod.coerce.date().nullish(),

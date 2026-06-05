@@ -21,6 +21,8 @@ export const SessionStatus = {
 export interface Session {
   id: number;
   visitorNickname: string;
+  /** @nullable */
+  visitorId?: string | null;
   status: SessionStatus;
   createdAt: string;
   /** @nullable */
@@ -66,6 +68,8 @@ export interface SessionInput {
   visitorNickname: string;
   /** @nullable */
   agentId?: number | null;
+  /** @nullable */
+  visitorId?: string | null;
 }
 
 export type MessageSenderType = typeof MessageSenderType[keyof typeof MessageSenderType];
@@ -199,4 +203,9 @@ export interface UploadResult {
   url: string;
   filename: string;
 }
+
+export type VisitorResumeSessionParams = {
+visitorId: string;
+agentId: number;
+};
 

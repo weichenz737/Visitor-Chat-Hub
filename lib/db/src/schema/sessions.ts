@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const sessionsTable = pgTable("chat_sessions", {
   id: serial("id").primaryKey(),
+  visitorId: text("visitor_id"),
   visitorNickname: text("visitor_nickname").notNull(),
   status: text("status").notNull().default("waiting"), // waiting | active | closed
   agentId: integer("agent_id"),

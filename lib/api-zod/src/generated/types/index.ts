@@ -29,3 +29,4 @@ export * from './sessionSummary';
 export * from './sessionSummaryStatus';
 export * from './updateAgentBody';
 export * from './uploadResult';
+export * from './visitorResumeSessionParams';

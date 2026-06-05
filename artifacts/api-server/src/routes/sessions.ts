@@ -7,6 +7,7 @@ import {
   GetSessionParams,
   GetSessionMessagesParams,
   MarkSessionReadParams,
+  VisitorResumeSessionQueryParams,
 } from "@workspace/api-zod";
 import { getOnlineSessionIds, broadcastReadReceiptToSession } from "../lib/websocket";
 
@@ -31,10 +32,41 @@ router.post("/sessions", async (req, res): Promise<void> => {
     .values({
       visitorNickname: parsed.data.visitorNickname,
       agentId: parsed.data.agentId ?? undefined,
+      visitorId: parsed.data.visitorId ?? undefined,
     })
     .returning();
 
   res.status(201).json(session);
+});
+
+// Must be before /sessions/:id to avoid route conflict
+router.get("/sessions/visitor-resume", async (req, res): Promise<void> => {
+  const parsed = VisitorResumeSessionQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { visitorId, agentId } = parsed.data;
+
+  const [session] = await db
+    .select()
+    .from(sessionsTable)
+    .where(
+      and(
+        eq(sessionsTable.visitorId, visitorId),
+        eq(sessionsTable.agentId, agentId)
+      )
+    )
+    .orderBy(desc(sessionsTable.createdAt))
+    .limit(1);
+
+  if (!session) {
+    res.status(404).json({ error: "No existing session" });
+    return;
+  }
+
+  res.json(session);
 });
 
 router.get("/sessions", async (req, res): Promise<void> => {
@@ -93,7 +125,6 @@ router.get("/sessions", async (req, res): Promise<void> => {
     lastSeenAt: s.lastSeenAt,
     agentId: s.agentId,
     unreadCount: unreadMap.get(s.id) ?? 0,
-    // Online = WS currently connected OR lastSeenAt within 1 minute
     isOnline: onlineIds.has(s.id) || isActiveWithinOneMinute(s.lastSeenAt),
     lastMessage: lastMsgMap.get(s.id)?.content ?? null,
     lastMessageAt: lastMsgMap.get(s.id)?.createdAt ?? null,
@@ -186,7 +217,6 @@ router.post("/sessions/:id/read", async (req, res): Promise<void> => {
     )
     .returning();
 
-  // Notify visitor their messages were read
   if (result.length > 0) {
     broadcastReadReceiptToSession(params.data.id, now.toISOString());
   }

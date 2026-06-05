@@ -10,6 +10,8 @@ import type { SessionStatus } from './sessionStatus';
 export interface Session {
   id: number;
   visitorNickname: string;
+  /** @nullable */
+  visitorId?: string | null;
   status: SessionStatus;
   createdAt: Date;
   /** @nullable */

@@ -3,9 +3,24 @@ import { useLocation } from "wouter";
 import {
   useListPublicAgents,
   useCreateSession,
+  visitorResumeSession,
   getListPublicAgentsQueryKey,
 } from "@workspace/api-client-react";
 import { MessageCircle, ArrowRight, ShieldCheck, Loader2 } from "lucide-react";
+
+// ── Persistent visitor identity ──────────────────────────────────────────────
+
+function getOrCreateVisitorId(): string {
+  const key = "visitor_id";
+  let id = localStorage.getItem(key);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(key, id);
+  }
+  return id;
+}
+
+// ── Random nickname ──────────────────────────────────────────────────────────
 
 const ADJECTIVES = ["快樂", "友善", "活潑", "溫柔", "聰明", "勇敢", "開朗", "細心", "熱情", "耐心"];
 const NOUNS = ["小貓", "小狗", "兔子", "熊貓", "企鵝", "海豚", "獅子", "老虎", "狐狸", "鸚鵡"];
@@ -17,6 +32,8 @@ function generateNickname(): string {
   return `${adj}${noun}${num}`;
 }
 
+// ── Types ────────────────────────────────────────────────────────────────────
+
 interface AgentPublic {
   id: number;
   displayName: string;
@@ -24,14 +41,26 @@ interface AgentPublic {
   introduction?: string | null;
 }
 
-function AgentCard({ agent, onClick, loading }: { agent: AgentPublic; onClick: () => void; loading?: boolean }) {
+// ── Card component ───────────────────────────────────────────────────────────
+
+function AgentCard({
+  agent,
+  onClick,
+  loading,
+}: {
+  agent: AgentPublic;
+  onClick: () => void;
+  loading?: boolean;
+}) {
   return (
     <div
       data-testid={`card-agent-${agent.id}`}
       onClick={loading ? undefined : onClick}
-      className={`group relative flex flex-col rounded-2xl overflow-hidden border border-border bg-card transition-all duration-200 ${loading ? "opacity-70 cursor-wait" : "cursor-pointer hover:shadow-lg hover:border-primary/40"}`}
+      className={`group relative flex flex-col rounded-2xl overflow-hidden border border-border bg-card transition-all duration-200 ${
+        loading ? "opacity-70 cursor-wait" : "cursor-pointer hover:shadow-lg hover:border-primary/40"
+      }`}
     >
-      {/* Photo area — tall, fills most of the card */}
+      {/* Photo area */}
       <div className="relative w-full aspect-[3/4] bg-muted overflow-hidden">
         {agent.avatarUrl ? (
           <img
@@ -61,7 +90,7 @@ function AgentCard({ agent, onClick, loading }: { agent: AgentPublic; onClick: (
         )}
       </div>
 
-      {/* Info area — compact footer */}
+      {/* Footer */}
       <div className="px-4 py-3 flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="font-semibold text-foreground text-base truncate">{agent.displayName}</p>
@@ -77,6 +106,8 @@ function AgentCard({ agent, onClick, loading }: { agent: AgentPublic; onClick: (
   );
 }
 
+// ── Page ─────────────────────────────────────────────────────────────────────
+
 export default function VisitorAgentList() {
   const [, setLocation] = useLocation();
   const [loadingAgentId, setLoadingAgentId] = useState<number | null>(null);
@@ -86,25 +117,41 @@ export default function VisitorAgentList() {
     query: { queryKey: getListPublicAgentsQueryKey() },
   });
 
-  const handleSelectAgent = (agent: AgentPublic) => {
+  const handleSelectAgent = async (agent: AgentPublic) => {
     if (loadingAgentId !== null) return;
-    const nickname = generateNickname();
     setLoadingAgentId(agent.id);
-    createSession.mutate(
-      { data: { visitorNickname: nickname, agentId: agent.id } },
-      {
-        onSuccess: (session) => {
-          sessionStorage.setItem("sessionId", String(session.id));
-          sessionStorage.setItem("visitorNickname", nickname);
-          sessionStorage.setItem("agentId", String(agent.id));
-          sessionStorage.setItem("agentName", agent.displayName);
-          setLocation("/chat");
-        },
-        onError: () => {
-          setLoadingAgentId(null);
-        },
-      }
-    );
+
+    const visitorId = getOrCreateVisitorId();
+
+    try {
+      // Try to resume an existing session for this visitor + agent
+      const existing = await visitorResumeSession({ visitorId, agentId: agent.id });
+      // Restore session into sessionStorage and go straight to chat
+      sessionStorage.setItem("sessionId", String(existing.id));
+      sessionStorage.setItem("visitorNickname", existing.visitorNickname);
+      sessionStorage.setItem("agentId", String(agent.id));
+      sessionStorage.setItem("agentName", agent.displayName);
+      setLocation("/chat");
+    } catch {
+      // No existing session (404) → create a new one
+      const nickname = generateNickname();
+      createSession.mutate(
+        { data: { visitorNickname: nickname, agentId: agent.id, visitorId } },
+        {
+          onSuccess: (session) => {
+            sessionStorage.setItem("sessionId", String(session.id));
+            sessionStorage.setItem("visitorNickname", nickname);
+            sessionStorage.setItem("agentId", String(agent.id));
+            sessionStorage.setItem("agentName", agent.displayName);
+            setLocation("/chat");
+          },
+          onError: () => setLoadingAgentId(null),
+        }
+      );
+      return; // don't reset loadingAgentId here — mutation handles it
+    }
+
+    setLoadingAgentId(null);
   };
 
   return (
@@ -123,7 +170,10 @@ export default function VisitorAgentList() {
         {isLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-2xl overflow-hidden border border-border bg-card animate-pulse">
+              <div
+                key={i}
+                className="rounded-2xl overflow-hidden border border-border bg-card animate-pulse"
+              >
                 <div className="aspect-[3/4] bg-muted" />
                 <div className="px-4 py-3 space-y-2">
                   <div className="h-4 bg-muted rounded w-2/3" />
