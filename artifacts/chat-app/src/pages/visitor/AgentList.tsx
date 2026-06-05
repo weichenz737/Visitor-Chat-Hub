@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { MessageCircle, ArrowRight, ShieldCheck, User } from "lucide-react";
+import { MessageCircle, ArrowRight, ShieldCheck } from "lucide-react";
 
 interface AgentPublic {
   id: number;
@@ -23,22 +23,48 @@ interface AgentPublic {
   introduction?: string | null;
 }
 
-function AgentAvatar({ agent, size = "lg" }: { agent: AgentPublic; size?: "sm" | "lg" }) {
-  const dim = size === "lg" ? "w-16 h-16 text-2xl" : "w-10 h-10 text-base";
-  if (agent.avatarUrl) {
-    return (
-      <img
-        src={agent.avatarUrl}
-        alt={agent.displayName}
-        className={`${dim} rounded-full object-cover flex-shrink-0`}
-      />
-    );
-  }
+function AgentCard({ agent, onClick }: { agent: AgentPublic; onClick: () => void }) {
   return (
     <div
-      className={`${dim} rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0`}
+      data-testid={`card-agent-${agent.id}`}
+      onClick={onClick}
+      className="group relative flex flex-col rounded-2xl overflow-hidden border border-border bg-card cursor-pointer hover:shadow-lg hover:border-primary/40 transition-all duration-200"
     >
-      <span className="font-bold text-primary">{agent.displayName.charAt(0)}</span>
+      {/* Photo area — tall, fills most of the card */}
+      <div className="relative w-full aspect-[3/4] bg-muted overflow-hidden">
+        {agent.avatarUrl ? (
+          <img
+            src={agent.avatarUrl}
+            alt={agent.displayName}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+            <span className="text-6xl font-bold text-primary/40 select-none">
+              {agent.displayName.charAt(0)}
+            </span>
+          </div>
+        )}
+
+        {/* Online badge */}
+        <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-full px-2.5 py-1 shadow-sm">
+          <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+          <span className="text-xs font-medium text-green-700">在線</span>
+        </div>
+      </div>
+
+      {/* Info area — compact footer */}
+      <div className="px-4 py-3 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-semibold text-foreground text-base truncate">{agent.displayName}</p>
+          {agent.introduction && (
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{agent.introduction}</p>
+          )}
+        </div>
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+          <ArrowRight className="w-4 h-4 text-primary group-hover:text-primary-foreground transition-colors" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -90,52 +116,37 @@ export default function VisitorAgentList() {
           <MessageCircle className="w-6 h-6 text-primary-foreground" />
         </div>
         <h1 className="text-2xl font-bold text-foreground tracking-tight">線上客服中心</h1>
-        <p className="text-sm text-muted-foreground mt-1">請選擇您想聯繫的客服人員</p>
+        <p className="text-sm text-muted-foreground mt-1">選擇您想聯繫的客服人員，立即開始對話</p>
       </div>
 
-      {/* Agent List */}
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      {/* Card Grid */}
+      <div className="max-w-3xl mx-auto px-4 py-8">
         {isLoading ? (
-          <div className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 bg-card border border-border rounded-2xl animate-pulse" />
+              <div key={i} className="rounded-2xl overflow-hidden border border-border bg-card animate-pulse">
+                <div className="aspect-[3/4] bg-muted" />
+                <div className="px-4 py-3 space-y-2">
+                  <div className="h-4 bg-muted rounded w-2/3" />
+                  <div className="h-3 bg-muted rounded w-full" />
+                </div>
+              </div>
             ))}
           </div>
         ) : (agents as AgentPublic[]).length === 0 ? (
-          <div className="text-center py-20">
-            <User className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+          <div className="text-center py-24">
             <p className="text-base font-medium text-muted-foreground">目前沒有可用的客服人員</p>
             <p className="text-sm text-muted-foreground/70 mt-1">請稍後再試</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {(agents as AgentPublic[]).map((agent) => (
-              <div
-                key={agent.id}
-                data-testid={`card-agent-${agent.id}`}
-                className="bg-card border border-border rounded-2xl p-5 flex items-center gap-4 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer group"
-                onClick={() => handleSelectAgent(agent)}
-              >
-                <AgentAvatar agent={agent} size="lg" />
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-foreground text-base">{agent.displayName}</h3>
-                  {agent.introduction && (
-                    <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
-                      {agent.introduction}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500" />
-                    <span className="text-xs text-green-600 font-medium">在線服務中</span>
-                  </div>
-                </div>
-                <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
-              </div>
+              <AgentCard key={agent.id} agent={agent} onClick={() => handleSelectAgent(agent)} />
             ))}
           </div>
         )}
 
-        <div className="mt-8 text-center">
+        <div className="mt-10 text-center">
           <button
             onClick={() => setLocation("/agent")}
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors group"
@@ -152,8 +163,20 @@ export default function VisitorAgentList() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             {selectedAgent && (
-              <div className="flex items-center gap-3 mb-2">
-                <AgentAvatar agent={selectedAgent} size="sm" />
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-primary/10 flex items-center justify-center">
+                  {selectedAgent.avatarUrl ? (
+                    <img
+                      src={selectedAgent.avatarUrl}
+                      alt={selectedAgent.displayName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-lg font-bold text-primary">
+                      {selectedAgent.displayName.charAt(0)}
+                    </span>
+                  )}
+                </div>
                 <div>
                   <DialogTitle className="text-base">{selectedAgent.displayName}</DialogTitle>
                   <DialogDescription className="text-xs mt-0.5">
