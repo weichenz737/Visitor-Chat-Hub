@@ -127,10 +127,12 @@ export default function VisitorChat() {
 
   const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Reset BEFORE await — Safari recycles the synthetic event after async operations,
+    // so resetting after await causes the input to get stuck (same file can't be picked again)
+    e.target.value = "";
     if (!file) return;
     const url = await uploadImage(file);
     if (url) sendImageMessage(url);
-    e.target.value = "";
   };
 
   const handleBack = () => {

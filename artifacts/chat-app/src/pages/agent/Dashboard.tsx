@@ -656,10 +656,11 @@ export default function AgentDashboard() {
 
   const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Reset BEFORE await — Safari recycles synthetic events after async, preventing re-selection of same file
+    e.target.value = "";
     if (!file || !selectedSessionId) return;
     const url = await uploadImage(file);
     if (url) sendImageMessage(url, selectedSessionId);
-    e.target.value = "";
     queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
   };
 
