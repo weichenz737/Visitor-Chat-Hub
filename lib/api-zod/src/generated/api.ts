@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Customer service chat system API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import * as zod from 'zod';
 
@@ -31,7 +31,7 @@ export const CreateSessionBody = zod.object({
 
 
 /**
- * @summary List all sessions (agent use)
+ * @summary List sessions (filtered by ownership for agents, all for super_admin)
  */
 export const ListSessionsResponseItem = zod.object({
   "id": zod.number(),
@@ -39,6 +39,7 @@ export const ListSessionsResponseItem = zod.object({
   "status": zod.enum(['waiting', 'active', 'closed']),
   "createdAt": zod.coerce.date(),
   "lastSeenAt": zod.coerce.date().nullish(),
+  "agentId": zod.number().nullish(),
   "unreadCount": zod.number(),
   "isOnline": zod.boolean(),
   "lastMessage": zod.string().nullish(),
@@ -67,7 +68,7 @@ export const VisitorResumeSessionResponse = zod.object({
 
 
 /**
- * @summary Get session statistics
+ * @summary Get session statistics (scoped by ownership)
  */
 export const GetSessionStatsResponse = zod.object({
   "total": zod.number(),
@@ -106,6 +107,7 @@ export const GetSessionMessagesParams = zod.object({
 export const GetSessionMessagesResponseItem = zod.object({
   "id": zod.number(),
   "sessionId": zod.number(),
+  "ownerId": zod.number().nullish(),
   "senderType": zod.enum(['visitor', 'agent']),
   "messageType": zod.enum(['text', 'image']),
   "content": zod.string(),
@@ -163,7 +165,9 @@ export const AgentLoginBody = zod.object({
 export const AgentLoginResponse = zod.object({
   "token": zod.string(),
   "agentId": zod.number(),
-  "username": zod.string()
+  "userId": zod.number(),
+  "username": zod.string(),
+  "role": zod.enum(['agent', 'super_admin'])
 })
 
 
@@ -172,16 +176,19 @@ export const AgentLoginResponse = zod.object({
  */
 export const GetAgentMeResponse = zod.object({
   "agentId": zod.number(),
-  "username": zod.string()
+  "userId": zod.number(),
+  "username": zod.string(),
+  "role": zod.enum(['agent', 'super_admin'])
 })
 
 
 /**
- * @summary List all agents (admin)
+ * @summary List all agents (super_admin only)
  */
 export const AdminListAgentsResponseItem = zod.object({
   "id": zod.number(),
   "username": zod.string(),
+  "role": zod.enum(['agent', 'super_admin']),
   "displayName": zod.string(),
   "avatarUrl": zod.string().nullish(),
   "introduction": zod.string().nullish(),
@@ -192,7 +199,7 @@ export const AdminListAgentsResponse = zod.array(AdminListAgentsResponseItem)
 
 
 /**
- * @summary Create a new agent (admin)
+ * @summary Create a new agent (super_admin only)
  */
 export const adminCreateAgentBodyUsernameMin = 3;
 
@@ -205,13 +212,14 @@ export const AdminCreateAgentBody = zod.object({
   "username": zod.string().min(adminCreateAgentBodyUsernameMin),
   "password": zod.string().min(adminCreateAgentBodyPasswordMin),
   "displayName": zod.string().min(1),
+  "role": zod.enum(['agent', 'super_admin']).optional(),
   "introduction": zod.string().nullish(),
   "avatarUrl": zod.string().nullish()
 })
 
 
 /**
- * @summary Update agent profile (admin)
+ * @summary Update agent profile (super_admin only)
  */
 export const AdminUpdateAgentParams = zod.object({
   "id": zod.coerce.number()
@@ -224,6 +232,7 @@ export const adminUpdateAgentBodyPasswordMin = 6;
 
 export const AdminUpdateAgentBody = zod.object({
   "displayName": zod.string().min(1).optional(),
+  "role": zod.enum(['agent', 'super_admin']).optional(),
   "introduction": zod.string().nullish(),
   "avatarUrl": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
@@ -233,6 +242,7 @@ export const AdminUpdateAgentBody = zod.object({
 export const AdminUpdateAgentResponse = zod.object({
   "id": zod.number(),
   "username": zod.string(),
+  "role": zod.enum(['agent', 'super_admin']),
   "displayName": zod.string(),
   "avatarUrl": zod.string().nullish(),
   "introduction": zod.string().nullish(),
@@ -242,7 +252,7 @@ export const AdminUpdateAgentResponse = zod.object({
 
 
 /**
- * @summary Delete an agent (admin)
+ * @summary Delete an agent (super_admin only)
  */
 export const AdminDeleteAgentParams = zod.object({
   "id": zod.coerce.number()

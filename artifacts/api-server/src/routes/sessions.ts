@@ -10,6 +10,7 @@ import {
   VisitorResumeSessionQueryParams,
 } from "@workspace/api-zod";
 import { getOnlineSessionIds, broadcastReadReceiptToSession } from "../lib/websocket";
+import { requireAuth } from "../lib/middleware";
 
 const router: IRouter = Router();
 
@@ -20,6 +21,7 @@ function isActiveWithinOneMinute(lastSeenAt: Date | null): boolean {
   return Date.now() - new Date(lastSeenAt).getTime() < ONE_MINUTE_MS;
 }
 
+// Public: visitor creates a session
 router.post("/sessions", async (req, res): Promise<void> => {
   const parsed = CreateSessionBody.safeParse(req.body);
   if (!parsed.success) {
@@ -39,6 +41,7 @@ router.post("/sessions", async (req, res): Promise<void> => {
   res.status(201).json(session);
 });
 
+// Public: visitor resumes an existing session
 // Must be before /sessions/:id to avoid route conflict
 router.get("/sessions/visitor-resume", async (req, res): Promise<void> => {
   const parsed = VisitorResumeSessionQueryParams.safeParse(req.query);
@@ -69,10 +72,20 @@ router.get("/sessions/visitor-resume", async (req, res): Promise<void> => {
   res.json(session);
 });
 
+// Agent: list sessions (filtered by ownership for non-super_admin)
 router.get("/sessions", async (req, res): Promise<void> => {
+  const payload = requireAuth(req, res);
+  if (!payload) return;
+
+  const ownerFilter =
+    payload.role !== "super_admin"
+      ? eq(sessionsTable.agentId, payload.userId)
+      : undefined;
+
   const sessions = await db
     .select()
     .from(sessionsTable)
+    .where(ownerFilter)
     .orderBy(desc(sessionsTable.createdAt));
 
   const onlineIds = getOnlineSessionIds();
@@ -133,12 +146,22 @@ router.get("/sessions", async (req, res): Promise<void> => {
   res.json(result);
 });
 
-router.get("/sessions/stats", async (_req, res): Promise<void> => {
+// Agent: session stats (filtered by ownership for non-super_admin)
+router.get("/sessions/stats", async (req, res): Promise<void> => {
+  const payload = requireAuth(req, res);
+  if (!payload) return;
+
+  const ownerFilter =
+    payload.role !== "super_admin"
+      ? eq(sessionsTable.agentId, payload.userId)
+      : undefined;
+
   const onlineIds = getOnlineSessionIds();
 
   const allSessions = await db
     .select({ id: sessionsTable.id, status: sessionsTable.status, lastSeenAt: sessionsTable.lastSeenAt })
-    .from(sessionsTable);
+    .from(sessionsTable)
+    .where(ownerFilter);
 
   const total = allSessions.length;
   const online = allSessions.filter(
@@ -147,10 +170,19 @@ router.get("/sessions/stats", async (_req, res): Promise<void> => {
   const waiting = allSessions.filter((s) => s.status === "waiting").length;
   const active = allSessions.filter((s) => s.status === "active").length;
 
-  const [unreadRow] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(messagesTable)
-    .where(and(eq(messagesTable.senderType, "visitor"), isNull(messagesTable.readAt)));
+  const sessionIds = allSessions.map((s) => s.id);
+  const [unreadRow] = sessionIds.length
+    ? await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(messagesTable)
+        .where(
+          and(
+            sql`${messagesTable.sessionId} = ANY(ARRAY[${sql.join(sessionIds.map((id) => sql`${id}`), sql`, `)}]::int[])`,
+            eq(messagesTable.senderType, "visitor"),
+            isNull(messagesTable.readAt)
+          )
+        )
+    : [{ count: 0 }];
 
   res.json({
     total,
@@ -161,7 +193,11 @@ router.get("/sessions/stats", async (_req, res): Promise<void> => {
   });
 });
 
+// Agent: get session by ID (ownership check)
 router.get("/sessions/:id", async (req, res): Promise<void> => {
+  const payload = requireAuth(req, res);
+  if (!payload) return;
+
   const params = GetSessionParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -178,13 +214,38 @@ router.get("/sessions/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  if (payload.role !== "super_admin" && session.agentId !== payload.userId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
   res.json(session);
 });
 
+// Agent: get messages for a session (ownership check)
 router.get("/sessions/:id/messages", async (req, res): Promise<void> => {
+  const payload = requireAuth(req, res);
+  if (!payload) return;
+
   const params = GetSessionMessagesParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  // Verify session ownership
+  const [session] = await db
+    .select({ agentId: sessionsTable.agentId })
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, params.data.id));
+
+  if (!session) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+
+  if (payload.role !== "super_admin" && session.agentId !== payload.userId) {
+    res.status(403).json({ error: "Forbidden" });
     return;
   }
 
@@ -197,10 +258,30 @@ router.get("/sessions/:id/messages", async (req, res): Promise<void> => {
   res.json(messages);
 });
 
+// Agent: mark session messages as read (ownership check)
 router.post("/sessions/:id/read", async (req, res): Promise<void> => {
+  const payload = requireAuth(req, res);
+  if (!payload) return;
+
   const params = MarkSessionReadParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  // Verify session ownership
+  const [session] = await db
+    .select({ agentId: sessionsTable.agentId })
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, params.data.id));
+
+  if (!session) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+
+  if (payload.role !== "super_admin" && session.agentId !== payload.userId) {
+    res.status(403).json({ error: "Forbidden" });
     return;
   }
 

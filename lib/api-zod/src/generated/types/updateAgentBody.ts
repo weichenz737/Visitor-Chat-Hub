@@ -3,12 +3,14 @@
  * Do not edit manually.
  * Api
  * Customer service chat system API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
+import type { UpdateAgentBodyRole } from './updateAgentBodyRole';
 
 export interface UpdateAgentBody {
   /** @minLength 1 */
   displayName?: string;
+  role?: UpdateAgentBodyRole;
   /** @nullable */
   introduction?: string | null;
   /** @nullable */

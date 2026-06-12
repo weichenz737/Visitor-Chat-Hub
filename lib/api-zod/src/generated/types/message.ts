@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Customer service chat system API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import type { MessageMessageType } from './messageMessageType';
 import type { MessageSenderType } from './messageSenderType';
@@ -11,6 +11,8 @@ import type { MessageSenderType } from './messageSenderType';
 export interface Message {
   id: number;
   sessionId: number;
+  /** @nullable */
+  ownerId?: number | null;
   senderType: MessageSenderType;
   messageType: MessageMessageType;
   content: string;

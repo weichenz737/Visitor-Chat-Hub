@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Customer service chat system API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 export interface HealthStatus {
   status: string;
@@ -47,6 +47,8 @@ export interface SessionSummary {
   createdAt: string;
   /** @nullable */
   lastSeenAt?: string | null;
+  /** @nullable */
+  agentId?: number | null;
   unreadCount: number;
   isOnline: boolean;
   /** @nullable */
@@ -91,6 +93,8 @@ export const MessageMessageType = {
 export interface Message {
   id: number;
   sessionId: number;
+  /** @nullable */
+  ownerId?: number | null;
   senderType: MessageSenderType;
   messageType: MessageMessageType;
   content: string;
@@ -139,15 +143,35 @@ export interface AgentCredentials {
   password: string;
 }
 
+export type AgentSessionRole = typeof AgentSessionRole[keyof typeof AgentSessionRole];
+
+
+export const AgentSessionRole = {
+  agent: 'agent',
+  super_admin: 'super_admin',
+} as const;
+
 export interface AgentSession {
   token: string;
   agentId: number;
+  userId: number;
   username: string;
+  role: AgentSessionRole;
 }
+
+export type AgentInfoRole = typeof AgentInfoRole[keyof typeof AgentInfoRole];
+
+
+export const AgentInfoRole = {
+  agent: 'agent',
+  super_admin: 'super_admin',
+} as const;
 
 export interface AgentInfo {
   agentId: number;
+  userId: number;
   username: string;
+  role: AgentInfoRole;
 }
 
 export interface AgentPublic {
@@ -159,9 +183,18 @@ export interface AgentPublic {
   introduction?: string | null;
 }
 
+export type AdminAgentRole = typeof AdminAgentRole[keyof typeof AdminAgentRole];
+
+
+export const AdminAgentRole = {
+  agent: 'agent',
+  super_admin: 'super_admin',
+} as const;
+
 export interface AdminAgent {
   id: number;
   username: string;
+  role: AdminAgentRole;
   displayName: string;
   /** @nullable */
   avatarUrl?: string | null;
@@ -171,6 +204,14 @@ export interface AdminAgent {
   createdAt: string;
 }
 
+export type CreateAgentBodyRole = typeof CreateAgentBodyRole[keyof typeof CreateAgentBodyRole];
+
+
+export const CreateAgentBodyRole = {
+  agent: 'agent',
+  super_admin: 'super_admin',
+} as const;
+
 export interface CreateAgentBody {
   /** @minLength 3 */
   username: string;
@@ -178,15 +219,25 @@ export interface CreateAgentBody {
   password: string;
   /** @minLength 1 */
   displayName: string;
+  role?: CreateAgentBodyRole;
   /** @nullable */
   introduction?: string | null;
   /** @nullable */
   avatarUrl?: string | null;
 }
 
+export type UpdateAgentBodyRole = typeof UpdateAgentBodyRole[keyof typeof UpdateAgentBodyRole];
+
+
+export const UpdateAgentBodyRole = {
+  agent: 'agent',
+  super_admin: 'super_admin',
+} as const;
+
 export interface UpdateAgentBody {
   /** @minLength 1 */
   displayName?: string;
+  role?: UpdateAgentBodyRole;
   /** @nullable */
   introduction?: string | null;
   /** @nullable */

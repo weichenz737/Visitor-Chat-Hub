@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Customer service chat system API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 
 export type SessionSummaryStatus = typeof SessionSummaryStatus[keyof typeof SessionSummaryStatus];

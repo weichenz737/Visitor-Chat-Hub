@@ -3,8 +3,9 @@
  * Do not edit manually.
  * Api
  * Customer service chat system API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
+import type { CreateAgentBodyRole } from './createAgentBodyRole';
 
 export interface CreateAgentBody {
   /** @minLength 3 */
@@ -13,6 +14,7 @@ export interface CreateAgentBody {
   password: string;
   /** @minLength 1 */
   displayName: string;
+  role?: CreateAgentBodyRole;
   /** @nullable */
   introduction?: string | null;
   /** @nullable */

@@ -10,6 +10,7 @@ interface ClientInfo {
   type: "visitor" | "agent" | "unknown";
   sessionId?: number;
   agentId?: number;
+  role?: string;
   visitorNickname?: string;
 }
 
@@ -46,7 +47,20 @@ export function createWebSocketServer(): WebSocketServer {
           .update(sessionsTable)
           .set({ lastSeenAt: new Date() })
           .where(eq(sessionsTable.id, info.sessionId));
-        broadcastToAgents({ type: "session_update", sessionId: info.sessionId, isOnline: false });
+
+        // Notify only the session owner (and super_admins)
+        const [session] = await db
+          .select({ agentId: sessionsTable.agentId })
+          .from(sessionsTable)
+          .where(eq(sessionsTable.id, info.sessionId));
+
+        if (session) {
+          broadcastToSessionOwner(session.agentId ?? 0, {
+            type: "session_update",
+            sessionId: info.sessionId,
+            isOnline: false,
+          });
+        }
       }
       clients.delete(ws);
       logger.info("WebSocket client disconnected");
@@ -66,7 +80,6 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
   const type = msg.type as string;
 
   if (type === "ping") {
-    // Update lastSeenAt for visitors on each ping to track activity
     const info = clients.get(ws);
     if (info?.type === "visitor" && info.sessionId) {
       await db
@@ -88,7 +101,20 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
       .set({ lastSeenAt: new Date() })
       .where(eq(sessionsTable.id, sessionId));
 
-    broadcastToAgents({ type: "session_update", sessionId, isOnline: true });
+    // Notify only the session owner (and super_admins)
+    const [session] = await db
+      .select({ agentId: sessionsTable.agentId })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, sessionId));
+
+    if (session) {
+      broadcastToSessionOwner(session.agentId ?? 0, {
+        type: "session_update",
+        sessionId,
+        isOnline: true,
+      });
+    }
+
     logger.info({ sessionId, visitorNickname }, "Visitor connected");
     return;
   }
@@ -100,8 +126,8 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
       safeSend(ws, { type: "error", error: "Invalid token" });
       return;
     }
-    clients.set(ws, { type: "agent", agentId: payload.agentId });
-    logger.info({ agentId: payload.agentId }, "Agent connected via WS");
+    clients.set(ws, { type: "agent", agentId: payload.userId, role: payload.role });
+    logger.info({ agentId: payload.userId, role: payload.role }, "Agent connected via WS");
     return;
   }
 
@@ -118,9 +144,17 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
       return;
     }
 
+    // Resolve ownerId from the session for data isolation
+    const [session] = await db
+      .select({ agentId: sessionsTable.agentId })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, sessionId));
+
+    const ownerId = session?.agentId ?? undefined;
+
     const [savedMessage] = await db
       .insert(messagesTable)
-      .values({ sessionId, senderType, messageType, content, imageUrl: imageUrl ?? undefined })
+      .values({ sessionId, ownerId, senderType, messageType, content, imageUrl: imageUrl ?? undefined })
       .returning();
 
     if (senderType === "visitor") {
@@ -135,10 +169,24 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
         .where(eq(sessionsTable.id, sessionId));
     }
 
-    broadcastToSession(sessionId, { type: "message", message: savedMessage }, info?.type === "visitor" ? "agent" : "visitor");
+    // Send to the visitor side of this session
+    broadcastToSessionVisitor(sessionId, { type: "message", message: savedMessage });
+
+    // Echo back to the sender
     safeSend(ws, { type: "message", message: savedMessage });
 
-    broadcastToAgents({ type: "session_update", sessionId, lastMessage: content, lastMessageAt: new Date().toISOString() });
+    // Notify only the session owner agent(s) (and super_admins)
+    if (info?.type !== "agent") {
+      // Visitor sent a message — notify the owning agent
+      broadcastToSessionOwner(ownerId ?? 0, { type: "message", message: savedMessage });
+    }
+
+    broadcastToSessionOwner(ownerId ?? 0, {
+      type: "session_update",
+      sessionId,
+      lastMessage: content,
+      lastMessageAt: new Date().toISOString(),
+    });
     return;
   }
 
@@ -149,7 +197,6 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
       .update(messagesTable)
       .set({ readAt: now })
       .where(and(eq(messagesTable.sessionId, sessionId), isNull(messagesTable.readAt)));
-    // Notify visitor their messages were read
     broadcastToSessionVisitor(sessionId, { type: "read_receipt", sessionId, readAt: now.toISOString() });
     return;
   }
@@ -163,20 +210,16 @@ function safeSend(ws: WebSocket, data: unknown): void {
   }
 }
 
-function broadcastToAgents(data: unknown): void {
+/**
+ * Broadcast to agents who own the session (agentId match) OR are super_admin.
+ * ownerId=0 means no owner — super_admins still receive it.
+ */
+function broadcastToSessionOwner(ownerId: number, data: unknown): void {
   for (const [ws, info] of clients) {
     if (info.type === "agent") {
-      safeSend(ws, data);
-    }
-  }
-}
-
-function broadcastToSession(sessionId: number, data: unknown, targetType: "visitor" | "agent"): void {
-  for (const [ws, info] of clients) {
-    if (targetType === "visitor" && info.type === "visitor" && info.sessionId === sessionId) {
-      safeSend(ws, data);
-    } else if (targetType === "agent" && info.type === "agent") {
-      safeSend(ws, data);
+      if (info.role === "super_admin" || info.agentId === ownerId) {
+        safeSend(ws, data);
+      }
     }
   }
 }

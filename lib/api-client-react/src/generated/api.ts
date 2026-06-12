@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Customer service chat system API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import {
   useMutation,
@@ -209,7 +209,7 @@ export const getListSessionsUrl = () => {
 }
 
 /**
- * @summary List all sessions (agent use)
+ * @summary List sessions (filtered by ownership for agents, all for super_admin)
  */
 export const listSessions = async ( options?: RequestInit): Promise<SessionSummary[]> => {
 
@@ -233,7 +233,7 @@ export const getListSessionsQueryKey = () => {
     }
 
 
-export const getListSessionsQueryOptions = <TData = Awaited<ReturnType<typeof listSessions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListSessionsQueryOptions = <TData = Awaited<ReturnType<typeof listSessions>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -252,14 +252,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListSessionsQueryResult = NonNullable<Awaited<ReturnType<typeof listSessions>>>
-export type ListSessionsQueryError = ErrorType<unknown>
+export type ListSessionsQueryError = ErrorType<void>
 
 
 /**
- * @summary List all sessions (agent use)
+ * @summary List sessions (filtered by ownership for agents, all for super_admin)
  */
 
-export function useListSessions<TData = Awaited<ReturnType<typeof listSessions>>, TError = ErrorType<unknown>>(
+export function useListSessions<TData = Awaited<ReturnType<typeof listSessions>>, TError = ErrorType<void>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -370,7 +370,7 @@ export const getGetSessionStatsUrl = () => {
 }
 
 /**
- * @summary Get session statistics
+ * @summary Get session statistics (scoped by ownership)
  */
 export const getSessionStats = async ( options?: RequestInit): Promise<SessionStats> => {
 
@@ -394,7 +394,7 @@ export const getGetSessionStatsQueryKey = () => {
     }
 
 
-export const getGetSessionStatsQueryOptions = <TData = Awaited<ReturnType<typeof getSessionStats>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetSessionStatsQueryOptions = <TData = Awaited<ReturnType<typeof getSessionStats>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -413,14 +413,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetSessionStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getSessionStats>>>
-export type GetSessionStatsQueryError = ErrorType<unknown>
+export type GetSessionStatsQueryError = ErrorType<void>
 
 
 /**
- * @summary Get session statistics
+ * @summary Get session statistics (scoped by ownership)
  */
 
-export function useGetSessionStats<TData = Awaited<ReturnType<typeof getSessionStats>>, TError = ErrorType<unknown>>(
+export function useGetSessionStats<TData = Awaited<ReturnType<typeof getSessionStats>>, TError = ErrorType<void>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -548,7 +548,7 @@ export const getGetSessionMessagesQueryKey = (id: number,) => {
     }
 
 
-export const getGetSessionMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getSessionMessages>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetSessionMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getSessionMessages>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -567,14 +567,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetSessionMessagesQueryResult = NonNullable<Awaited<ReturnType<typeof getSessionMessages>>>
-export type GetSessionMessagesQueryError = ErrorType<unknown>
+export type GetSessionMessagesQueryError = ErrorType<void>
 
 
 /**
  * @summary Get all messages for a session
  */
 
-export function useGetSessionMessages<TData = Awaited<ReturnType<typeof getSessionMessages>>, TError = ErrorType<unknown>>(
+export function useGetSessionMessages<TData = Awaited<ReturnType<typeof getSessionMessages>>, TError = ErrorType<void>>(
  id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -617,7 +617,7 @@ export const markSessionRead = async (id: number, options?: RequestInit): Promis
 
 
 
-export const getMarkSessionReadMutationOptions = <TError = ErrorType<unknown>,
+export const getMarkSessionReadMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markSessionRead>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof markSessionRead>>, TError,{id: number}, TContext> => {
 
@@ -646,12 +646,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type MarkSessionReadMutationResult = NonNullable<Awaited<ReturnType<typeof markSessionRead>>>
 
-    export type MarkSessionReadMutationError = ErrorType<unknown>
+    export type MarkSessionReadMutationError = ErrorType<void>
 
     /**
  * @summary Mark all messages in session as read
  */
-export const useMarkSessionRead = <TError = ErrorType<unknown>,
+export const useMarkSessionRead = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markSessionRead>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof markSessionRead>>,
@@ -967,7 +967,7 @@ export const getAdminListAgentsUrl = () => {
 }
 
 /**
- * @summary List all agents (admin)
+ * @summary List all agents (super_admin only)
  */
 export const adminListAgents = async ( options?: RequestInit): Promise<AdminAgent[]> => {
 
@@ -1014,7 +1014,7 @@ export type AdminListAgentsQueryError = ErrorType<void>
 
 
 /**
- * @summary List all agents (admin)
+ * @summary List all agents (super_admin only)
  */
 
 export function useAdminListAgents<TData = Awaited<ReturnType<typeof adminListAgents>>, TError = ErrorType<void>>(
@@ -1044,7 +1044,7 @@ export const getAdminCreateAgentUrl = () => {
 }
 
 /**
- * @summary Create a new agent (admin)
+ * @summary Create a new agent (super_admin only)
  */
 export const adminCreateAgent = async (createAgentBody: CreateAgentBody, options?: RequestInit): Promise<AdminAgent> => {
 
@@ -1093,7 +1093,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type AdminCreateAgentMutationError = ErrorType<void>
 
     /**
- * @summary Create a new agent (admin)
+ * @summary Create a new agent (super_admin only)
  */
 export const useAdminCreateAgent = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminCreateAgent>>, TError,{data: BodyType<CreateAgentBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -1115,7 +1115,7 @@ export const getAdminUpdateAgentUrl = (id: number,) => {
 }
 
 /**
- * @summary Update agent profile (admin)
+ * @summary Update agent profile (super_admin only)
  */
 export const adminUpdateAgent = async (id: number,
     updateAgentBody: UpdateAgentBody, options?: RequestInit): Promise<AdminAgent> => {
@@ -1165,7 +1165,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type AdminUpdateAgentMutationError = ErrorType<void>
 
     /**
- * @summary Update agent profile (admin)
+ * @summary Update agent profile (super_admin only)
  */
 export const useAdminUpdateAgent = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminUpdateAgent>>, TError,{id: number;data: BodyType<UpdateAgentBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -1187,7 +1187,7 @@ export const getAdminDeleteAgentUrl = (id: number,) => {
 }
 
 /**
- * @summary Delete an agent (admin)
+ * @summary Delete an agent (super_admin only)
  */
 export const adminDeleteAgent = async (id: number, options?: RequestInit): Promise<DeleteResult> => {
 
@@ -1235,7 +1235,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type AdminDeleteAgentMutationError = ErrorType<void>
 
     /**
- * @summary Delete an agent (admin)
+ * @summary Delete an agent (super_admin only)
  */
 export const useAdminDeleteAgent = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminDeleteAgent>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}

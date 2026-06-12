@@ -3,10 +3,13 @@
  * Do not edit manually.
  * Api
  * Customer service chat system API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
+import type { AgentInfoRole } from './agentInfoRole';
 
 export interface AgentInfo {
   agentId: number;
+  userId: number;
   username: string;
+  role: AgentInfoRole;
 }

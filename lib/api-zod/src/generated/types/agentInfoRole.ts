@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.2.0
  */
 
-export type MessageInputSenderType = typeof MessageInputSenderType[keyof typeof MessageInputSenderType];
+export type AgentInfoRole = typeof AgentInfoRole[keyof typeof AgentInfoRole];
 
 
-export const MessageInputSenderType = {
-  visitor: 'visitor',
+export const AgentInfoRole = {
   agent: 'agent',
+  super_admin: 'super_admin',
 } as const;

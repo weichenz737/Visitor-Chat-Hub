@@ -43,6 +43,7 @@ import {
   Pencil,
   Trash2,
   ShieldCheck,
+  Crown,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { zhTW } from "date-fns/locale";
@@ -63,6 +64,7 @@ interface SessionSummary {
 interface AdminAgent {
   id: number;
   username: string;
+  role: string;
   displayName: string;
   avatarUrl?: string | null;
   introduction?: string | null;
@@ -234,7 +236,7 @@ function AgentAvatar({ agent }: { agent: AdminAgent }) {
   );
 }
 
-// ─── Agent Management Panel ───────────────────────────────────────────────────
+// ─── Agent Management Panel (super_admin only) ────────────────────────────────
 
 function AgentManagementPanel() {
   const queryClient = useQueryClient();
@@ -246,10 +248,10 @@ function AgentManagementPanel() {
   const { uploadImage } = useImageUpload();
 
   const [form, setForm] = useState({
-    username: "", password: "", displayName: "", introduction: "", avatarUrl: "",
+    username: "", password: "", displayName: "", introduction: "", avatarUrl: "", role: "agent" as "agent" | "super_admin",
   });
   const [editForm, setEditForm] = useState({
-    displayName: "", introduction: "", avatarUrl: "", isActive: true, password: "",
+    displayName: "", introduction: "", avatarUrl: "", isActive: true, password: "", role: "agent" as "agent" | "super_admin",
   });
 
   const { data: agents = [], isLoading } = useAdminListAgents({
@@ -268,6 +270,7 @@ function AgentManagementPanel() {
           username: form.username.trim(),
           password: form.password,
           displayName: form.displayName.trim(),
+          role: form.role,
           introduction: form.introduction || null,
           avatarUrl: form.avatarUrl || null,
         },
@@ -276,7 +279,7 @@ function AgentManagementPanel() {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getAdminListAgentsQueryKey() });
           setCreateOpen(false);
-          setForm({ username: "", password: "", displayName: "", introduction: "", avatarUrl: "" });
+          setForm({ username: "", password: "", displayName: "", introduction: "", avatarUrl: "", role: "agent" });
           toast({ title: "客服人員已建立" });
         },
         onError: (err: any) => {
@@ -294,6 +297,7 @@ function AgentManagementPanel() {
       avatarUrl: agent.avatarUrl ?? "",
       isActive: agent.isActive,
       password: "",
+      role: (agent.role as "agent" | "super_admin") ?? "agent",
     });
   };
 
@@ -307,6 +311,7 @@ function AgentManagementPanel() {
           introduction: editForm.introduction || null,
           avatarUrl: editForm.avatarUrl || null,
           isActive: editForm.isActive,
+          role: editForm.role,
           password: editForm.password || null,
         },
       },
@@ -383,6 +388,12 @@ function AgentManagementPanel() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-foreground">{agent.displayName}</p>
+                    {agent.role === "super_admin" && (
+                      <Badge className="text-xs bg-amber-100 text-amber-700 border-amber-300 gap-1">
+                        <Crown className="w-3 h-3" />
+                        超管
+                      </Badge>
+                    )}
                     <Badge
                       variant="outline"
                       className={`text-xs ${agent.isActive ? "text-green-600 border-green-300" : "text-muted-foreground"}`}
@@ -472,6 +483,18 @@ function AgentManagementPanel() {
               onChange={(e) => setForm((p) => ({ ...p, introduction: e.target.value }))}
               className="resize-none min-h-[80px]"
             />
+            {/* Role selector */}
+            <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+              <label className="text-sm font-medium text-foreground">角色：</label>
+              <select
+                value={form.role}
+                onChange={(e) => setForm((p) => ({ ...p, role: e.target.value as "agent" | "super_admin" }))}
+                className="flex-1 bg-transparent text-sm text-foreground border border-border rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="agent">普通客服</option>
+                <option value="super_admin">超級管理員</option>
+              </select>
+            </div>
             <Button
               className="w-full"
               onClick={handleCreate}
@@ -535,6 +558,18 @@ function AgentManagementPanel() {
               value={editForm.password}
               onChange={(e) => setEditForm((p) => ({ ...p, password: e.target.value }))}
             />
+            {/* Role selector */}
+            <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+              <label className="text-sm font-medium text-foreground">角色：</label>
+              <select
+                value={editForm.role}
+                onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value as "agent" | "super_admin" }))}
+                className="flex-1 bg-transparent text-sm text-foreground border border-border rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="agent">普通客服</option>
+                <option value="super_admin">超級管理員</option>
+              </select>
+            </div>
             <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
               <input
                 id="isActive"
@@ -575,10 +610,19 @@ export default function AgentDashboard() {
 
   const agentToken = localStorage.getItem("agent_token");
   const agentUsername = localStorage.getItem("agent_username") ?? "客服人員";
+  const agentRole = localStorage.getItem("agent_role") ?? "agent";
+  const isSuperAdmin = agentRole === "super_admin";
 
   useEffect(() => {
     if (!agentToken) setLocation("/agent");
   }, [agentToken, setLocation]);
+
+  // If on agents tab but not super_admin, switch to chat tab
+  useEffect(() => {
+    if (!isSuperAdmin && activeTab === "agents") {
+      setActiveTab("chat");
+    }
+  }, [isSuperAdmin, activeTab]);
 
   const { data: sessions = [], isLoading: sessionsLoading } = useListSessions({
     query: { refetchInterval: 3000, queryKey: getListSessionsQueryKey() },
@@ -656,7 +700,6 @@ export default function AgentDashboard() {
 
   const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    // Reset BEFORE await — Safari recycles synthetic events after async, preventing re-selection of same file
     e.target.value = "";
     if (!file || !selectedSessionId) return;
     const url = await uploadImage(file);
@@ -668,6 +711,7 @@ export default function AgentDashboard() {
     localStorage.removeItem("agent_token");
     localStorage.removeItem("agent_username");
     localStorage.removeItem("agent_id");
+    localStorage.removeItem("agent_role");
     setLocation("/agent");
   };
 
@@ -680,16 +724,24 @@ export default function AgentDashboard() {
         {/* Header */}
         <div className="px-4 py-4 border-b border-border">
           <div className="flex items-center justify-between mb-3">
-            <div>
-              <h1 className="font-bold text-foreground text-sm">客服工作台</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">{agentUsername}</p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h1 className="font-bold text-foreground text-sm truncate">客服工作台</h1>
+                {isSuperAdmin && (
+                  <Badge className="text-xs bg-amber-100 text-amber-700 border-amber-300 gap-1 flex-shrink-0 px-1.5 py-0">
+                    <Crown className="w-3 h-3" />
+                    超管
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5 truncate">{agentUsername}</p>
             </div>
             <Button
               data-testid="button-logout"
               variant="ghost"
               size="sm"
               onClick={handleLogout}
-              className="text-muted-foreground hover:text-foreground h-8 w-8 p-0"
+              className="text-muted-foreground hover:text-foreground h-8 w-8 p-0 flex-shrink-0"
             >
               <LogOut className="w-4 h-4" />
             </Button>
@@ -712,7 +764,7 @@ export default function AgentDashboard() {
           )}
         </div>
 
-        {/* Tabs */}
+        {/* Tabs — agents tab only for super_admin */}
         <div className="flex border-b border-border">
           <button
             onClick={() => setActiveTab("chat")}
@@ -725,17 +777,19 @@ export default function AgentDashboard() {
             <MessageSquare className="w-3.5 h-3.5" />
             對話列表
           </button>
-          <button
-            onClick={() => setActiveTab("agents")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors ${
-              activeTab === "agents"
-                ? "text-primary border-b-2 border-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            客服管理
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={() => setActiveTab("agents")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors ${
+                activeTab === "agents"
+                  ? "text-primary border-b-2 border-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              客服管理
+            </button>
+          )}
         </div>
 
         {/* WS Status */}

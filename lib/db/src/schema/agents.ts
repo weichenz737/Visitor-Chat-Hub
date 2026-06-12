@@ -6,6 +6,7 @@ export const agentsTable = pgTable("agents", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  role: text("role").notNull().default("agent"), // agent | super_admin
   displayName: text("display_name").notNull().default(""),
   avatarUrl: text("avatar_url"),
   introduction: text("introduction"),

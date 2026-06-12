@@ -3,15 +3,19 @@
  * Do not edit manually.
  * Api
  * Customer service chat system API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 
 export * from './adminAgent';
+export * from './adminAgentRole';
 export * from './agentCredentials';
 export * from './agentInfo';
+export * from './agentInfoRole';
 export * from './agentPublic';
 export * from './agentSession';
+export * from './agentSessionRole';
 export * from './createAgentBody';
+export * from './createAgentBodyRole';
 export * from './deleteResult';
 export * from './healthStatus';
 export * from './message';
@@ -28,5 +32,6 @@ export * from './sessionStatus';
 export * from './sessionSummary';
 export * from './sessionSummaryStatus';
 export * from './updateAgentBody';
+export * from './updateAgentBodyRole';
 export * from './uploadResult';
 export * from './visitorResumeSessionParams';

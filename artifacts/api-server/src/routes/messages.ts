@@ -13,10 +13,19 @@ router.post("/messages", async (req, res): Promise<void> => {
     return;
   }
 
+  // Resolve ownerId from the session
+  const [session] = await db
+    .select({ agentId: sessionsTable.agentId })
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, parsed.data.sessionId));
+
+  const ownerId = session?.agentId ?? undefined;
+
   const [message] = await db
     .insert(messagesTable)
     .values({
       sessionId: parsed.data.sessionId,
+      ownerId,
       senderType: parsed.data.senderType,
       messageType: parsed.data.messageType,
       content: parsed.data.content,

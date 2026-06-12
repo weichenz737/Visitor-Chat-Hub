@@ -3,7 +3,8 @@ import { db } from "@workspace/db";
 import { agentsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { signToken, verifyToken } from "../lib/auth";
+import { signToken } from "../lib/auth";
+import { requireAuth } from "../lib/middleware";
 import { AgentLoginBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -36,7 +37,7 @@ router.post("/agent/login", async (req, res): Promise<void> => {
     .from(agentsTable)
     .where(eq(agentsTable.username, parsed.data.username));
 
-  if (!agent) {
+  if (!agent || !agent.isActive) {
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
@@ -47,25 +48,16 @@ router.post("/agent/login", async (req, res): Promise<void> => {
     return;
   }
 
-  const token = signToken({ agentId: agent.id, username: agent.username });
-  res.json({ token, agentId: agent.id, username: agent.username });
+  const role = (agent.role as "agent" | "super_admin") ?? "agent";
+  const token = signToken({ userId: agent.id, role, username: agent.username });
+  res.json({ token, agentId: agent.id, userId: agent.id, username: agent.username, role });
 });
 
 router.get("/agent/me", async (req, res): Promise<void> => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Not authenticated" });
-    return;
-  }
+  const payload = requireAuth(req, res);
+  if (!payload) return;
 
-  const token = authHeader.slice(7);
-  const payload = verifyToken(token);
-  if (!payload) {
-    res.status(401).json({ error: "Invalid token" });
-    return;
-  }
-
-  res.json({ agentId: payload.agentId, username: payload.username });
+  res.json({ agentId: payload.userId, userId: payload.userId, username: payload.username, role: payload.role });
 });
 
 export default router;

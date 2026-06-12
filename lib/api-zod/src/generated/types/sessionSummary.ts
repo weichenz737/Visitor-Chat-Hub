@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Customer service chat system API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import type { SessionSummaryStatus } from './sessionSummaryStatus';
 
@@ -14,6 +14,8 @@ export interface SessionSummary {
   createdAt: Date;
   /** @nullable */
   lastSeenAt?: Date | null;
+  /** @nullable */
+  agentId?: number | null;
   unreadCount: number;
   isOnline: boolean;
   /** @nullable */

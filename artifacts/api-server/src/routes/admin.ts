@@ -3,32 +3,19 @@ import { db } from "@workspace/db";
 import { agentsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { verifyToken } from "../lib/auth";
+import { requireSuperAdmin } from "../lib/middleware";
 import { AdminCreateAgentBody, AdminUpdateAgentParams, AdminUpdateAgentBody, AdminDeleteAgentParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-function requireAuth(req: any, res: any): number | null {
-  const authHeader = req.headers.authorization as string | undefined;
-  if (!authHeader?.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Not authenticated" });
-    return null;
-  }
-  const payload = verifyToken(authHeader.slice(7));
-  if (!payload) {
-    res.status(401).json({ error: "Invalid token" });
-    return null;
-  }
-  return payload.agentId;
-}
-
 router.get("/admin/agents", async (req, res): Promise<void> => {
-  if (requireAuth(req, res) === null) return;
+  if (requireSuperAdmin(req, res) === null) return;
 
   const agents = await db
     .select({
       id: agentsTable.id,
       username: agentsTable.username,
+      role: agentsTable.role,
       displayName: agentsTable.displayName,
       avatarUrl: agentsTable.avatarUrl,
       introduction: agentsTable.introduction,
@@ -42,7 +29,7 @@ router.get("/admin/agents", async (req, res): Promise<void> => {
 });
 
 router.post("/admin/agents", async (req, res): Promise<void> => {
-  if (requireAuth(req, res) === null) return;
+  if (requireSuperAdmin(req, res) === null) return;
 
   const parsed = AdminCreateAgentBody.safeParse(req.body);
   if (!parsed.success) {
@@ -50,7 +37,7 @@ router.post("/admin/agents", async (req, res): Promise<void> => {
     return;
   }
 
-  const { username, password, displayName, introduction, avatarUrl } = parsed.data;
+  const { username, password, displayName, introduction, avatarUrl, role } = parsed.data;
 
   const existing = await db
     .select({ id: agentsTable.id })
@@ -69,6 +56,7 @@ router.post("/admin/agents", async (req, res): Promise<void> => {
     .values({
       username,
       passwordHash,
+      role: (role as "agent" | "super_admin") ?? "agent",
       displayName: displayName ?? "",
       introduction: introduction ?? undefined,
       avatarUrl: avatarUrl ?? undefined,
@@ -77,6 +65,7 @@ router.post("/admin/agents", async (req, res): Promise<void> => {
     .returning({
       id: agentsTable.id,
       username: agentsTable.username,
+      role: agentsTable.role,
       displayName: agentsTable.displayName,
       avatarUrl: agentsTable.avatarUrl,
       introduction: agentsTable.introduction,
@@ -88,7 +77,7 @@ router.post("/admin/agents", async (req, res): Promise<void> => {
 });
 
 router.patch("/admin/agents/:id", async (req, res): Promise<void> => {
-  if (requireAuth(req, res) === null) return;
+  if (requireSuperAdmin(req, res) === null) return;
 
   const params = AdminUpdateAgentParams.safeParse(req.params);
   if (!params.success) {
@@ -117,6 +106,7 @@ router.patch("/admin/agents/:id", async (req, res): Promise<void> => {
   if (body.data.introduction !== undefined) updates.introduction = body.data.introduction;
   if (body.data.avatarUrl !== undefined) updates.avatarUrl = body.data.avatarUrl;
   if (body.data.isActive !== undefined) updates.isActive = body.data.isActive;
+  if (body.data.role !== undefined) updates.role = body.data.role;
   if (body.data.password) {
     updates.passwordHash = await bcrypt.hash(body.data.password, 10);
   }
@@ -128,6 +118,7 @@ router.patch("/admin/agents/:id", async (req, res): Promise<void> => {
     .returning({
       id: agentsTable.id,
       username: agentsTable.username,
+      role: agentsTable.role,
       displayName: agentsTable.displayName,
       avatarUrl: agentsTable.avatarUrl,
       introduction: agentsTable.introduction,
@@ -139,7 +130,7 @@ router.patch("/admin/agents/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/admin/agents/:id", async (req, res): Promise<void> => {
-  if (requireAuth(req, res) === null) return;
+  if (requireSuperAdmin(req, res) === null) return;
 
   const params = AdminDeleteAgentParams.safeParse(req.params);
   if (!params.success) {

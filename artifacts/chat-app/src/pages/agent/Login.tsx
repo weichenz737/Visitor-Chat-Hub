@@ -22,7 +22,8 @@ export default function AgentLogin() {
         onSuccess: (data) => {
           localStorage.setItem("agent_token", data.token);
           localStorage.setItem("agent_username", data.username);
-          localStorage.setItem("agent_id", String(data.agentId));
+          localStorage.setItem("agent_id", String(data.userId ?? data.agentId));
+          localStorage.setItem("agent_role", data.role ?? "agent");
           setLocation("/agent/dashboard");
         },
         onError: () => {
@@ -108,8 +109,8 @@ export default function AgentLogin() {
 
           <div className="mt-5 pt-5 border-t border-border">
             <p className="text-xs text-muted-foreground text-center">
-              預設帳號：<span className="font-mono font-medium text-foreground">admin</span>
-              　密碼：<span className="font-mono font-medium text-foreground">admin123</span>
+              超管帳號：<span className="font-mono font-medium text-foreground">admin123</span>
+              　密碼：<span className="font-mono font-medium text-foreground">123456</span>
             </p>
           </div>
         </div>
