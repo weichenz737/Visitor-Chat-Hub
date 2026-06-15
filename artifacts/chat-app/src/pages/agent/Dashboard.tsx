@@ -115,6 +115,11 @@ function MessageBubble({ message }: { message: ChatMessage }) {
                 alt="共享圖片"
                 className="max-w-full rounded-lg cursor-pointer max-h-40 object-contain"
                 onClick={() => setShowLightbox(true)}
+                onError={(e) => {
+                  const el = e.target as HTMLImageElement;
+                  el.style.display = "none";
+                  el.parentElement!.innerHTML = '<span style="font-size:12px;opacity:0.6">圖片已失效</span>';
+                }}
               />
             ) : (
               <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
@@ -220,12 +225,14 @@ function SessionListItem({
 // ─── Agent Avatar ─────────────────────────────────────────────────────────────
 
 function AgentAvatar({ agent }: { agent: AdminAgent }) {
-  if (agent.avatarUrl) {
+  const [imgFailed, setImgFailed] = useState(false);
+  if (agent.avatarUrl && !imgFailed) {
     return (
       <img
         src={agent.avatarUrl}
         alt={agent.displayName}
         className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+        onError={() => setImgFailed(true)}
       />
     );
   }

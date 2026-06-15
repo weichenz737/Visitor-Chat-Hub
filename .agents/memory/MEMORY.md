@@ -1,3 +1,4 @@
 - [Multi-agent feature](multi-agent.md) — agents table has displayName/avatarUrl/introduction/isActive; admin CRUD at /admin/agents (JWT-protected); visitor picks agent at root `/`
 - [Auth helper pattern](auth-pattern.md) — verifyToken/signToken live in api-server/src/lib/auth.ts; requireAuth/requireSuperAdmin in middleware.ts; JWT payload now has userId+role+username+agentId(legacy)
 - [Multi-tenant architecture](multi-tenant.md) — role field on agents (agent|super_admin); sessions.agentId serves as owner_id; messages.ownerId set from session.agentId; all agent routes require auth; admin routes require super_admin; WS broadcasts scoped to session owner
+- [Object Storage migration](object-storage.md) — images stored in GCS via Replit Object Storage; presigned URL flow via POST /api/storage/uploads/request-url; serving via GET /api/storage/objects/*; legacy /api/upload/image (multer/disk) kept for backward compat; artifact.toml paths includes /storage

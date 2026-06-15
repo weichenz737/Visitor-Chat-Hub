@@ -48,6 +48,11 @@ function MessageBubble({ message, isOwn, agentName }: { message: ChatMessage; is
                 className="max-w-full rounded-lg cursor-pointer max-h-48 object-contain"
                 onClick={() => setShowLightbox(true)}
                 data-testid={`img-message-${message.id}`}
+                onError={(e) => {
+                  const el = e.target as HTMLImageElement;
+                  el.style.display = "none";
+                  el.parentElement!.innerHTML = '<span style="font-size:12px;opacity:0.6">圖片已失效</span>';
+                }}
               />
             ) : (
               <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>

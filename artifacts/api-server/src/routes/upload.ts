@@ -12,20 +12,38 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Allowed MIME types — includes iOS HEIC/HEIF and common variants
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
-  "image/jpg",   // non-standard but sent by some browsers
+  "image/jpg",
   "image/png",
   "image/gif",
   "image/webp",
-  "image/heic",  // iOS default camera format
-  "image/heif",  // iOS HEIF variant
+  "image/heic",
+  "image/heif",
   "image/bmp",
 ]);
 
-// Map MIME type → safe extension (some iOS files arrive with wrong/missing extension)
+// Extension → MIME fallback for browsers that send empty MIME (WeChat, some Android)
+const EXT_TO_MIME: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
+  ".bmp": "image/bmp",
+};
+
+function resolvedMime(file: Express.Multer.File): string {
+  if (file.mimetype && ALLOWED_MIME_TYPES.has(file.mimetype)) return file.mimetype;
+  // Empty or unknown MIME — try falling back to file extension
+  const ext = path.extname(file.originalname).toLowerCase();
+  return EXT_TO_MIME[ext] ?? "";
+}
+
 function safeExtension(file: Express.Multer.File): string {
+  const mime = resolvedMime(file);
   const mimeToExt: Record<string, string> = {
     "image/jpeg": ".jpg",
     "image/jpg": ".jpg",
@@ -36,17 +54,14 @@ function safeExtension(file: Express.Multer.File): string {
     "image/heif": ".heif",
     "image/bmp": ".bmp",
   };
-  const fromMime = mimeToExt[file.mimetype];
+  const fromMime = mimeToExt[mime];
   if (fromMime) return fromMime;
-  // Fall back to original extension if present
   const orig = path.extname(file.originalname).toLowerCase();
   return orig || ".jpg";
 }
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadsDir);
-  },
+  destination: (_req, _file, cb) => { cb(null, uploadsDir); },
   filename: (_req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const ext = safeExtension(file);
@@ -56,20 +71,23 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 20 * 1024 * 1024 }, // raised to 20MB for high-res phone photos
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+    const mime = resolvedMime(file);
+    if (mime) {
       cb(null, true);
     } else {
-      cb(new Error(`不支援的圖片格式：${file.mimetype}。請使用 JPG、PNG、WebP 或 GIF`));
+      logger.warn({ originalname: file.originalname, mimetype: file.mimetype }, "Rejected upload: unresolvable MIME type");
+      cb(new Error(`不支援的圖片格式。請使用 JPG、PNG、WebP 或 GIF`));
     }
   },
 });
 
 const router: IRouter = Router();
 
+// Legacy multipart endpoint — kept for backward compat with old local-disk uploads.
+// New uploads should use POST /api/storage/uploads/request-url (presigned GCS).
 router.post("/upload/image", (req, res): void => {
-  // Wrap multer in a callback to catch its errors and return proper JSON
   upload.single("file")(req, res, (err) => {
     if (err) {
       if (err instanceof multer.MulterError) {
@@ -80,7 +98,6 @@ router.post("/upload/image", (req, res): void => {
         }
         return;
       }
-      // fileFilter rejection or other error
       res.status(400).json({ error: err.message || "圖片上傳失敗" });
       return;
     }
@@ -92,7 +109,7 @@ router.post("/upload/image", (req, res): void => {
 
     const filename = req.file.filename;
     const url = `/uploads/${filename}`;
-    logger.info({ filename, mimetype: req.file.mimetype }, "Image uploaded");
+    logger.info({ filename, mimetype: req.file.mimetype }, "Image uploaded (legacy local storage)");
     res.json({ url, filename });
   });
 });

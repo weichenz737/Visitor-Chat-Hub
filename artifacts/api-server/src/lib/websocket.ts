@@ -184,7 +184,7 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
     broadcastToSessionOwner(ownerId ?? 0, {
       type: "session_update",
       sessionId,
-      lastMessage: content,
+      lastMessage: messageType === "image" ? "📷 圖片" : content,
       lastMessageAt: new Date().toISOString(),
     });
     return;
