@@ -272,7 +272,16 @@ Visitor-Chat-Hub/
 
 ---
 
-## 十二、本地开发与部署
+## 十二、仓库信息
+
+- GitHub：https://github.com/weichenz737/Visitor-Chat-Hub
+- 部署说明：见 [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+---
+
+## 十三、本地开发与部署
+
+> 数据库为 **启动时自动初始化**（Drizzle push + SQL 迁移 + seed），无需手工导入 SQL 备份。完整步骤见 [DEPLOYMENT.md](./DEPLOYMENT.md)。
 
 ### 启动
 
@@ -291,10 +300,7 @@ docker compose up -d
 
 ### 手动应用迁移
 
-```powershell
-Get-Content scripts/migrations/011_p6_system_logs.sql | docker exec -i chat-postgres psql -U postgres -d chatdb
-docker exec chat-postgres psql -U postgres -d chatdb -c "INSERT INTO schema_migrations (filename) VALUES ('011_p6_system_logs.sql') ON CONFLICT DO NOTHING;"
-```
+仅在自动迁移失败时使用，详见 [DEPLOYMENT.md](./DEPLOYMENT.md)。
 
 ### 前端缓存问题
 
@@ -306,9 +312,3 @@ docker restart visitor-chat-hubzip-admin-web-1
 ```
 
 客服端、访客端同理，替换对应容器名即可。
-
----
-
-## 十三、仓库信息
-
-- GitHub：https://github.com/weichenz737/Visitor-Chat-Hub
