@@ -1,12 +1,9 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
-import path from "path";
-import { fileURLToPath } from "url";
 import router from "./routes";
 import { logger } from "./lib/logger";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { UPLOADS_DIR } from "./lib/uploads-dir";
 
 const app: Express = express();
 
@@ -33,9 +30,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded images
-const uploadsDir = path.resolve(__dirname, "../uploads");
-app.use("/uploads", express.static(uploadsDir));
+// Serve uploaded images and files
+app.use("/uploads", express.static(UPLOADS_DIR));
 
 app.use("/api", router);
 

@@ -5,7 +5,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 import NotFound from "@/pages/not-found";
-import VisitorAgentList from "@/pages/visitor/AgentList";
+import VisitorHome from "@/pages/visitor/Home";
+import VisitorEntry from "@/pages/visitor/VisitorEntry";
 import VisitorChat from "@/pages/visitor/Chat";
 import AgentLogin from "@/pages/agent/Login";
 import AgentDashboard from "@/pages/agent/Dashboard";
@@ -20,8 +21,10 @@ const queryClient = new QueryClient();
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={VisitorAgentList} />
-      <Route path="/chat" component={VisitorChat} />
+      <Route path="/" component={VisitorHome} />
+      <Route path="/chat/room" component={VisitorChat} />
+      <Route path="/chat/:agentId" component={VisitorEntry} />
+      <Route path="/chat" component={VisitorEntry} />
       <Route path="/agent" component={AgentLogin} />
       <Route path="/agent/dashboard" component={AgentDashboard} />
       <Route component={NotFound} />

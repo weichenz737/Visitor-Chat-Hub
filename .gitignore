@@ -10,8 +10,14 @@ out-tsc
 
 # dependencies
 node_modules
+.pnpm-store/
 
-# IDEs and editors
+# Local uploads (runtime artifacts)
+artifacts/api-server/uploads/
+uploads/
+
+# Local env
+.env
 /.idea
 .project
 .classpath
@@ -47,3 +53,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Local env
+.env

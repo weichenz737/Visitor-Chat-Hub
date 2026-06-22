@@ -8,6 +8,8 @@
 import type { CreateAgentBodyRole } from './createAgentBodyRole';
 
 export interface CreateAgentBody {
+  /** Optional custom agent ID. Auto-assigned when omitted. */
+  id?: number;
   /** @minLength 3 */
   username: string;
   /** @minLength 6 */

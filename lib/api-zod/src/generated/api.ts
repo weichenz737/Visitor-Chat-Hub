@@ -55,7 +55,7 @@ export const HealthCheckResponse = zod.object({
 
 export const CreateSessionBody = zod.object({
   "visitorNickname": zod.string().min(1),
-  "agentId": zod.number().nullish(),
+  "agentId": zod.number(),
   "visitorId": zod.string().nullish()
 })
 
@@ -70,10 +70,14 @@ export const ListSessionsResponseItem = zod.object({
   "createdAt": zod.coerce.date(),
   "lastSeenAt": zod.coerce.date().nullish(),
   "agentId": zod.number().nullish(),
+  "agentDisplayName": zod.string().nullish(),
+  "agentAvatarUrl": zod.string().nullish(),
+  "agentIsActive": zod.boolean().nullish(),
   "unreadCount": zod.number(),
   "isOnline": zod.boolean(),
   "lastMessage": zod.string().nullish(),
-  "lastMessageAt": zod.coerce.date().nullish()
+  "lastMessageAt": zod.coerce.date().nullish(),
+  "hasNote": zod.boolean().optional()
 })
 export const ListSessionsResponse = zod.array(ListSessionsResponseItem)
 
@@ -134,14 +138,22 @@ export const GetSessionMessagesParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const GetSessionMessagesQueryParams = zod.object({
+  "visitorId": zod.coerce.string().optional().describe('Pass for visitor access without agent token')
+})
+
 export const GetSessionMessagesResponseItem = zod.object({
   "id": zod.number(),
   "sessionId": zod.number(),
   "ownerId": zod.number().nullish(),
   "senderType": zod.enum(['visitor', 'agent']),
-  "messageType": zod.enum(['text', 'image']),
+  "messageType": zod.enum(['text', 'image', 'file']),
   "content": zod.string(),
   "imageUrl": zod.string().nullish(),
+  "fileUrl": zod.string().nullish(),
+  "fileName": zod.string().nullish(),
+  "fileSize": zod.number().nullish(),
+  "mimeType": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "readAt": zod.coerce.date().nullish()
 })
@@ -149,14 +161,147 @@ export const GetSessionMessagesResponse = zod.array(GetSessionMessagesResponseIt
 
 
 /**
- * @summary Mark all messages in session as read
+ * @summary Mark visitor messages as read (agent)
  */
 export const MarkSessionReadParams = zod.object({
   "id": zod.coerce.number()
 })
 
 export const MarkSessionReadResponse = zod.object({
-  "count": zod.number()
+  "count": zod.number(),
+  "agentUnread": zod.number(),
+  "visitorUnread": zod.number(),
+  "lastMessageId": zod.number(),
+  "agentLastReadMsgId": zod.number(),
+  "visitorLastReadMsgId": zod.number()
+})
+
+
+/**
+ * @summary Mark agent messages as read (visitor)
+ */
+export const MarkSessionVisitorReadParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const MarkSessionVisitorReadBody = zod.object({
+  "visitorId": zod.string().optional()
+})
+
+export const MarkSessionVisitorReadResponse = zod.object({
+  "count": zod.number(),
+  "agentUnread": zod.number(),
+  "visitorUnread": zod.number(),
+  "lastMessageId": zod.number(),
+  "agentLastReadMsgId": zod.number(),
+  "visitorLastReadMsgId": zod.number()
+})
+
+
+/**
+ * @summary Get unread message counts for a session
+ */
+export const GetSessionUnreadParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetSessionUnreadQueryParams = zod.object({
+  "visitorId": zod.coerce.string().optional().describe('Pass for visitor access without agent token')
+})
+
+export const GetSessionUnreadResponse = zod.object({
+  "sessionId": zod.number(),
+  "agentUnread": zod.number(),
+  "visitorUnread": zod.number(),
+  "lastMessageId": zod.number(),
+  "agentLastReadMsgId": zod.number(),
+  "visitorLastReadMsgId": zod.number()
+})
+
+
+/**
+ * @summary Get private session notes (internal, not visible to visitors)
+ */
+export const GetSessionNotesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SessionNoteSchema = zod.object({
+  "id": zod.number(),
+  "sessionId": zod.number(),
+  "agentId": zod.number(),
+  "agentDisplayName": zod.string().nullish(),
+  "content": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "canEdit": zod.boolean()
+})
+
+export const GetSessionNotesResponse = zod.object({
+  "notes": zod.array(SessionNoteSchema)
+})
+
+
+/**
+ * @summary Upsert own private session note (current session owner only)
+ */
+export const PutSessionNotesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const PutSessionNotesBody = zod.object({
+  "content": zod.string().max(10000)
+})
+
+export const PutSessionNotesResponse = SessionNoteSchema
+
+
+export const TransferSessionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const TransferSessionBody = zod.object({
+  "targetAgentId": zod.number(),
+  "reason": zod.string().max(500).optional()
+})
+
+export const SessionTransferSchema = zod.object({
+  "id": zod.number(),
+  "sessionId": zod.number(),
+  "fromAgentId": zod.number(),
+  "toAgentId": zod.number(),
+  "initiatedBy": zod.number(),
+  "reason": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "fromAgentDisplayName": zod.string().nullish(),
+  "toAgentDisplayName": zod.string().nullish(),
+  "initiatedByDisplayName": zod.string().nullish(),
+  "visitorNickname": zod.string().nullish()
+})
+
+export const TransferSessionResponse = zod.object({
+  "transfer": SessionTransferSchema,
+  "session": zod.object({
+    "id": zod.number(),
+    "visitorNickname": zod.string(),
+    "visitorId": zod.string().nullish(),
+    "status": zod.enum(['waiting', 'active', 'closed']),
+    "createdAt": zod.coerce.date(),
+    "lastSeenAt": zod.coerce.date().nullish(),
+    "agentId": zod.number().nullish()
+  })
+})
+
+export const GetSessionTransfersParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetSessionTransfersResponse = zod.object({
+  "transfers": zod.array(SessionTransferSchema)
+})
+
+export const AdminListTransfersResponse = zod.object({
+  "transfers": zod.array(SessionTransferSchema)
 })
 
 
@@ -166,22 +311,43 @@ export const MarkSessionReadResponse = zod.object({
 export const SendMessageBody = zod.object({
   "sessionId": zod.number(),
   "senderType": zod.enum(['visitor', 'agent']),
-  "messageType": zod.enum(['text', 'image']),
+  "messageType": zod.enum(['text', 'image', 'file']),
   "content": zod.string(),
-  "imageUrl": zod.string().nullish()
+  "imageUrl": zod.string().nullish(),
+  "fileUrl": zod.string().nullish(),
+  "fileName": zod.string().nullish(),
+  "fileSize": zod.number().nullish(),
+  "mimeType": zod.string().nullish()
 })
 
 
 /**
- * @summary List all active agents (public, for visitor selection)
+ * @summary List active reception agents (excludes super_admin)
  */
 export const ListPublicAgentsResponseItem = zod.object({
   "id": zod.number(),
   "displayName": zod.string(),
   "avatarUrl": zod.string().nullish(),
-  "introduction": zod.string().nullish()
+  "introduction": zod.string().nullish(),
+  "isOnline": zod.boolean()
 })
 export const ListPublicAgentsResponse = zod.array(ListPublicAgentsResponseItem)
+
+
+/**
+ * @summary Get reception agent by ID for dedicated chat link
+ */
+export const GetPublicAgentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetPublicAgentResponse = zod.object({
+  "id": zod.number(),
+  "displayName": zod.string(),
+  "avatarUrl": zod.string().nullish(),
+  "introduction": zod.string().nullish(),
+  "isOnline": zod.boolean()
+})
 
 
 /**
@@ -208,8 +374,19 @@ export const GetAgentMeResponse = zod.object({
   "agentId": zod.number(),
   "userId": zod.number(),
   "username": zod.string(),
-  "role": zod.enum(['agent', 'super_admin'])
+  "role": zod.enum(['agent', 'super_admin']),
+  "displayName": zod.string(),
+  "avatarUrl": zod.string().nullish()
 })
+
+export const updateAgentMeBodyDisplayNameMin = 1;
+
+export const UpdateAgentMeBody = zod.object({
+  "displayName": zod.string().min(updateAgentMeBodyDisplayNameMin).optional(),
+  "avatarUrl": zod.string().nullish()
+})
+
+export const UpdateAgentMeResponse = GetAgentMeResponse
 
 
 /**
@@ -239,6 +416,7 @@ export const adminCreateAgentBodyPasswordMin = 6;
 
 
 export const AdminCreateAgentBody = zod.object({
+  "id": zod.coerce.number().int().positive().optional(),
   "username": zod.string().min(adminCreateAgentBodyUsernameMin),
   "password": zod.string().min(adminCreateAgentBodyPasswordMin),
   "displayName": zod.string().min(1),
@@ -289,6 +467,152 @@ export const AdminDeleteAgentParams = zod.object({
 })
 
 export const AdminDeleteAgentResponse = zod.object({
+  "success": zod.boolean()
+})
+
+
+/**
+ * @summary List own quick replies
+ */
+export const AgentListQuickRepliesQueryParams = zod.object({
+  "q": zod.coerce.string().optional().describe('Search title or content')
+})
+
+export const AgentListQuickRepliesResponseItem = zod.object({
+  "id": zod.number(),
+  "agentId": zod.number(),
+  "title": zod.string(),
+  "content": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const AgentListQuickRepliesResponse = zod.array(AgentListQuickRepliesResponseItem)
+
+
+/**
+ * @summary Create a quick reply
+ */
+
+
+
+
+export const AgentCreateQuickReplyBody = zod.object({
+  "title": zod.string().min(1),
+  "content": zod.string().min(1)
+})
+
+
+/**
+ * @summary Update own quick reply
+ */
+export const AgentUpdateQuickReplyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+
+export const AgentUpdateQuickReplyBody = zod.object({
+  "title": zod.string().min(1).optional(),
+  "content": zod.string().min(1).optional()
+})
+
+export const AgentUpdateQuickReplyResponse = zod.object({
+  "id": zod.number(),
+  "agentId": zod.number(),
+  "title": zod.string(),
+  "content": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete own quick reply
+ */
+export const AgentDeleteQuickReplyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AgentDeleteQuickReplyResponse = zod.object({
+  "success": zod.boolean()
+})
+
+
+/**
+ * @summary List quick replies (all agents, super_admin only)
+ */
+export const AdminListQuickRepliesQueryParams = zod.object({
+  "agentId": zod.coerce.number().optional(),
+  "q": zod.coerce.string().optional()
+})
+
+export const AdminListQuickRepliesResponseItem = zod.object({
+  "id": zod.number(),
+  "agentId": zod.number(),
+  "title": zod.string(),
+  "content": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "agentDisplayName": zod.string().nullish(),
+  "agentUsername": zod.string().nullish()
+}))
+export const AdminListQuickRepliesResponse = zod.array(AdminListQuickRepliesResponseItem)
+
+
+/**
+ * @summary Create quick reply for an agent (super_admin only)
+ */
+
+
+
+
+export const AdminCreateQuickReplyBody = zod.object({
+  "agentId": zod.number(),
+  "title": zod.string().min(1),
+  "content": zod.string().min(1)
+})
+
+
+/**
+ * @summary Update any quick reply (super_admin only)
+ */
+export const AdminUpdateQuickReplyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+
+export const AdminUpdateQuickReplyBody = zod.object({
+  "title": zod.string().min(1).optional(),
+  "content": zod.string().min(1).optional()
+})
+
+export const AdminUpdateQuickReplyResponse = zod.object({
+  "id": zod.number(),
+  "agentId": zod.number(),
+  "title": zod.string(),
+  "content": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "agentDisplayName": zod.string().nullish(),
+  "agentUsername": zod.string().nullish()
+}))
+
+
+/**
+ * @summary Delete any quick reply (super_admin only)
+ */
+export const AdminDeleteQuickReplyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AdminDeleteQuickReplyResponse = zod.object({
   "success": zod.boolean()
 })
 

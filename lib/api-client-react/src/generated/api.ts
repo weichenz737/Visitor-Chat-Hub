@@ -21,21 +21,33 @@ import type {
 
 import type {
   AdminAgent,
+  AdminCreateQuickReplyBody,
+  AdminListQuickRepliesParams,
   AgentCredentials,
   AgentInfo,
+  AgentListQuickRepliesParams,
   AgentPublic,
   AgentSession,
   CreateAgentBody,
+  CreateQuickReplyBody,
   DeleteResult,
+  GetSessionMessagesParams,
+  GetSessionUnreadParams,
   HealthStatus,
+  MarkSessionVisitorReadBody,
   Message,
   MessageInput,
+  QuickReply,
+  QuickReplyWithAgent,
   ReadResult,
   Session,
   SessionInput,
   SessionStats,
   SessionSummary,
+  SessionUnread,
   UpdateAgentBody,
+  UpdateAgentMeBody,
+  UpdateQuickReplyBody,
   UploadUrlRequest,
   UploadUrlResponse,
   VisitorResumeSessionParams
@@ -588,20 +600,29 @@ export function useGetSession<TData = Awaited<ReturnType<typeof getSession>>, TE
 
 
 
-export const getGetSessionMessagesUrl = (id: number,) => {
+export const getGetSessionMessagesUrl = (id: number,
+    params?: GetSessionMessagesParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/sessions/${id}/messages`
+  return stringifiedParams.length > 0 ? `/api/sessions/${id}/messages?${stringifiedParams}` : `/api/sessions/${id}/messages`
 }
 
 /**
  * @summary Get all messages for a session
  */
-export const getSessionMessages = async (id: number, options?: RequestInit): Promise<Message[]> => {
+export const getSessionMessages = async (id: number,
+    params?: GetSessionMessagesParams, options?: RequestInit): Promise<Message[]> => {
 
-  return customFetch<Message[]>(getGetSessionMessagesUrl(id),
+  return customFetch<Message[]>(getGetSessionMessagesUrl(id,params),
   {
     ...options,
     method: 'GET'
@@ -614,23 +635,25 @@ export const getSessionMessages = async (id: number, options?: RequestInit): Pro
 
 
 
-export const getGetSessionMessagesQueryKey = (id: number,) => {
+export const getGetSessionMessagesQueryKey = (id: number,
+    params?: GetSessionMessagesParams,) => {
     return [
-    `/api/sessions/${id}/messages`
+    `/api/sessions/${id}/messages`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetSessionMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getSessionMessages>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetSessionMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getSessionMessages>>, TError = ErrorType<void>>(id: number,
+    params?: GetSessionMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetSessionMessagesQueryKey(id);
+  const queryKey =  queryOptions?.queryKey ?? getGetSessionMessagesQueryKey(id,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSessionMessages>>> = ({ signal }) => getSessionMessages(id, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSessionMessages>>> = ({ signal }) => getSessionMessages(id,params, { signal, ...requestOptions });
 
 
 
@@ -648,11 +671,11 @@ export type GetSessionMessagesQueryError = ErrorType<void>
  */
 
 export function useGetSessionMessages<TData = Awaited<ReturnType<typeof getSessionMessages>>, TError = ErrorType<void>>(
- id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ id: number, params?: GetSessionMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetSessionMessagesQueryOptions(id,options)
+  const queryOptions = getGetSessionMessagesQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -674,7 +697,7 @@ export const getMarkSessionReadUrl = (id: number,) => {
 }
 
 /**
- * @summary Mark all messages in session as read
+ * @summary Mark visitor messages as read (agent)
  */
 export const markSessionRead = async (id: number, options?: RequestInit): Promise<ReadResult> => {
 
@@ -722,7 +745,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type MarkSessionReadMutationError = ErrorType<void>
 
     /**
- * @summary Mark all messages in session as read
+ * @summary Mark visitor messages as read (agent)
  */
 export const useMarkSessionRead = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markSessionRead>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -734,6 +757,167 @@ export const useMarkSessionRead = <TError = ErrorType<void>,
       > => {
       return useMutation(getMarkSessionReadMutationOptions(options));
     }
+
+export const getMarkSessionVisitorReadUrl = (id: number,) => {
+
+
+
+
+  return `/api/sessions/${id}/visitor-read`
+}
+
+/**
+ * @summary Mark agent messages as read (visitor)
+ */
+export const markSessionVisitorRead = async (id: number,
+    markSessionVisitorReadBody?: MarkSessionVisitorReadBody, options?: RequestInit): Promise<ReadResult> => {
+
+  return customFetch<ReadResult>(getMarkSessionVisitorReadUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      markSessionVisitorReadBody,)
+  }
+);}
+
+
+
+
+export const getMarkSessionVisitorReadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markSessionVisitorRead>>, TError,{id: number;data?: BodyType<MarkSessionVisitorReadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markSessionVisitorRead>>, TError,{id: number;data?: BodyType<MarkSessionVisitorReadBody>}, TContext> => {
+
+const mutationKey = ['markSessionVisitorRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markSessionVisitorRead>>, {id: number;data?: BodyType<MarkSessionVisitorReadBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  markSessionVisitorRead(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkSessionVisitorReadMutationResult = NonNullable<Awaited<ReturnType<typeof markSessionVisitorRead>>>
+    export type MarkSessionVisitorReadMutationBody = BodyType<MarkSessionVisitorReadBody> | undefined
+    export type MarkSessionVisitorReadMutationError = ErrorType<void>
+
+    /**
+ * @summary Mark agent messages as read (visitor)
+ */
+export const useMarkSessionVisitorRead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markSessionVisitorRead>>, TError,{id: number;data?: BodyType<MarkSessionVisitorReadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markSessionVisitorRead>>,
+        TError,
+        {id: number;data?: BodyType<MarkSessionVisitorReadBody>},
+        TContext
+      > => {
+      return useMutation(getMarkSessionVisitorReadMutationOptions(options));
+    }
+
+export const getGetSessionUnreadUrl = (id: number,
+    params?: GetSessionUnreadParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/sessions/${id}/unread?${stringifiedParams}` : `/api/sessions/${id}/unread`
+}
+
+/**
+ * @summary Get unread message counts for a session
+ */
+export const getSessionUnread = async (id: number,
+    params?: GetSessionUnreadParams, options?: RequestInit): Promise<SessionUnread> => {
+
+  return customFetch<SessionUnread>(getGetSessionUnreadUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSessionUnreadQueryKey = (id: number,
+    params?: GetSessionUnreadParams,) => {
+    return [
+    `/api/sessions/${id}/unread`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetSessionUnreadQueryOptions = <TData = Awaited<ReturnType<typeof getSessionUnread>>, TError = ErrorType<void>>(id: number,
+    params?: GetSessionUnreadParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionUnread>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSessionUnreadQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSessionUnread>>> = ({ signal }) => getSessionUnread(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSessionUnread>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSessionUnreadQueryResult = NonNullable<Awaited<ReturnType<typeof getSessionUnread>>>
+export type GetSessionUnreadQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get unread message counts for a session
+ */
+
+export function useGetSessionUnread<TData = Awaited<ReturnType<typeof getSessionUnread>>, TError = ErrorType<void>>(
+ id: number,
+    params?: GetSessionUnreadParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionUnread>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSessionUnreadQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getSendMessageUrl = () => {
 
@@ -815,7 +999,7 @@ export const getListPublicAgentsUrl = () => {
 }
 
 /**
- * @summary List all active agents (public, for visitor selection)
+ * @summary List active reception agents (excludes super_admin)
  */
 export const listPublicAgents = async ( options?: RequestInit): Promise<AgentPublic[]> => {
 
@@ -862,7 +1046,7 @@ export type ListPublicAgentsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List all active agents (public, for visitor selection)
+ * @summary List active reception agents (excludes super_admin)
  */
 
 export function useListPublicAgents<TData = Awaited<ReturnType<typeof listPublicAgents>>, TError = ErrorType<unknown>>(
@@ -871,6 +1055,83 @@ export function useListPublicAgents<TData = Awaited<ReturnType<typeof listPublic
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListPublicAgentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetPublicAgentUrl = (id: number,) => {
+
+
+
+
+  return `/api/agents/${id}`
+}
+
+/**
+ * @summary Get reception agent by ID for dedicated chat link
+ */
+export const getPublicAgent = async (id: number, options?: RequestInit): Promise<AgentPublic> => {
+
+  return customFetch<AgentPublic>(getGetPublicAgentUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicAgentQueryKey = (id: number,) => {
+    return [
+    `/api/agents/${id}`
+    ] as const;
+    }
+
+
+export const getGetPublicAgentQueryOptions = <TData = Awaited<ReturnType<typeof getPublicAgent>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicAgent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicAgentQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicAgent>>> = ({ signal }) => getPublicAgent(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicAgent>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublicAgentQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicAgent>>>
+export type GetPublicAgentQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get reception agent by ID for dedicated chat link
+ */
+
+export function useGetPublicAgent<TData = Awaited<ReturnType<typeof getPublicAgent>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicAgent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublicAgentQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -1032,8 +1293,6 @@ export function useGetAgentMe<TData = Awaited<ReturnType<typeof getAgentMe>>, TE
 
 
 export const getAdminListAgentsUrl = () => {
-
-
 
 
   return `/api/admin/agents`
@@ -1319,5 +1578,599 @@ export const useAdminDeleteAgent = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getAdminDeleteAgentMutationOptions(options));
+    }
+
+export const getAgentListQuickRepliesUrl = (params?: AgentListQuickRepliesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/agent/quick-replies?${stringifiedParams}` : `/api/agent/quick-replies`
+}
+
+/**
+ * @summary List own quick replies
+ */
+export const agentListQuickReplies = async (params?: AgentListQuickRepliesParams, options?: RequestInit): Promise<QuickReply[]> => {
+
+  return customFetch<QuickReply[]>(getAgentListQuickRepliesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAgentListQuickRepliesQueryKey = (params?: AgentListQuickRepliesParams,) => {
+    return [
+    `/api/agent/quick-replies`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getAgentListQuickRepliesQueryOptions = <TData = Awaited<ReturnType<typeof agentListQuickReplies>>, TError = ErrorType<void>>(params?: AgentListQuickRepliesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof agentListQuickReplies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAgentListQuickRepliesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof agentListQuickReplies>>> = ({ signal }) => agentListQuickReplies(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof agentListQuickReplies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type AgentListQuickRepliesQueryResult = NonNullable<Awaited<ReturnType<typeof agentListQuickReplies>>>
+export type AgentListQuickRepliesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List own quick replies
+ */
+
+export function useAgentListQuickReplies<TData = Awaited<ReturnType<typeof agentListQuickReplies>>, TError = ErrorType<void>>(
+ params?: AgentListQuickRepliesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof agentListQuickReplies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getAgentListQuickRepliesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getAgentCreateQuickReplyUrl = () => {
+
+
+
+
+  return `/api/agent/quick-replies`
+}
+
+/**
+ * @summary Create a quick reply
+ */
+export const agentCreateQuickReply = async (createQuickReplyBody: CreateQuickReplyBody, options?: RequestInit): Promise<QuickReply> => {
+
+  return customFetch<QuickReply>(getAgentCreateQuickReplyUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createQuickReplyBody,)
+  }
+);}
+
+
+
+
+export const getAgentCreateQuickReplyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof agentCreateQuickReply>>, TError,{data: BodyType<CreateQuickReplyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof agentCreateQuickReply>>, TError,{data: BodyType<CreateQuickReplyBody>}, TContext> => {
+
+const mutationKey = ['agentCreateQuickReply'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof agentCreateQuickReply>>, {data: BodyType<CreateQuickReplyBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  agentCreateQuickReply(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AgentCreateQuickReplyMutationResult = NonNullable<Awaited<ReturnType<typeof agentCreateQuickReply>>>
+    export type AgentCreateQuickReplyMutationBody = BodyType<CreateQuickReplyBody>
+    export type AgentCreateQuickReplyMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a quick reply
+ */
+export const useAgentCreateQuickReply = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof agentCreateQuickReply>>, TError,{data: BodyType<CreateQuickReplyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof agentCreateQuickReply>>,
+        TError,
+        {data: BodyType<CreateQuickReplyBody>},
+        TContext
+      > => {
+      return useMutation(getAgentCreateQuickReplyMutationOptions(options));
+    }
+
+export const getAgentUpdateQuickReplyUrl = (id: number,) => {
+
+
+
+
+  return `/api/agent/quick-replies/${id}`
+}
+
+/**
+ * @summary Update own quick reply
+ */
+export const agentUpdateQuickReply = async (id: number,
+    updateQuickReplyBody: UpdateQuickReplyBody, options?: RequestInit): Promise<QuickReply> => {
+
+  return customFetch<QuickReply>(getAgentUpdateQuickReplyUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateQuickReplyBody,)
+  }
+);}
+
+
+
+
+export const getAgentUpdateQuickReplyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof agentUpdateQuickReply>>, TError,{id: number;data: BodyType<UpdateQuickReplyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof agentUpdateQuickReply>>, TError,{id: number;data: BodyType<UpdateQuickReplyBody>}, TContext> => {
+
+const mutationKey = ['agentUpdateQuickReply'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof agentUpdateQuickReply>>, {id: number;data: BodyType<UpdateQuickReplyBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  agentUpdateQuickReply(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AgentUpdateQuickReplyMutationResult = NonNullable<Awaited<ReturnType<typeof agentUpdateQuickReply>>>
+    export type AgentUpdateQuickReplyMutationBody = BodyType<UpdateQuickReplyBody>
+    export type AgentUpdateQuickReplyMutationError = ErrorType<void>
+
+    /**
+ * @summary Update own quick reply
+ */
+export const useAgentUpdateQuickReply = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof agentUpdateQuickReply>>, TError,{id: number;data: BodyType<UpdateQuickReplyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof agentUpdateQuickReply>>,
+        TError,
+        {id: number;data: BodyType<UpdateQuickReplyBody>},
+        TContext
+      > => {
+      return useMutation(getAgentUpdateQuickReplyMutationOptions(options));
+    }
+
+export const getAgentDeleteQuickReplyUrl = (id: number,) => {
+
+
+
+
+  return `/api/agent/quick-replies/${id}`
+}
+
+/**
+ * @summary Delete own quick reply
+ */
+export const agentDeleteQuickReply = async (id: number, options?: RequestInit): Promise<DeleteResult> => {
+
+  return customFetch<DeleteResult>(getAgentDeleteQuickReplyUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getAgentDeleteQuickReplyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof agentDeleteQuickReply>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof agentDeleteQuickReply>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['agentDeleteQuickReply'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof agentDeleteQuickReply>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  agentDeleteQuickReply(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AgentDeleteQuickReplyMutationResult = NonNullable<Awaited<ReturnType<typeof agentDeleteQuickReply>>>
+
+    export type AgentDeleteQuickReplyMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete own quick reply
+ */
+export const useAgentDeleteQuickReply = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof agentDeleteQuickReply>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof agentDeleteQuickReply>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getAgentDeleteQuickReplyMutationOptions(options));
+    }
+
+export const getAdminListQuickRepliesUrl = (params?: AdminListQuickRepliesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/quick-replies?${stringifiedParams}` : `/api/admin/quick-replies`
+}
+
+/**
+ * @summary List quick replies (all agents, super_admin only)
+ */
+export const adminListQuickReplies = async (params?: AdminListQuickRepliesParams, options?: RequestInit): Promise<QuickReplyWithAgent[]> => {
+
+  return customFetch<QuickReplyWithAgent[]>(getAdminListQuickRepliesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAdminListQuickRepliesQueryKey = (params?: AdminListQuickRepliesParams,) => {
+    return [
+    `/api/admin/quick-replies`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getAdminListQuickRepliesQueryOptions = <TData = Awaited<ReturnType<typeof adminListQuickReplies>>, TError = ErrorType<void>>(params?: AdminListQuickRepliesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminListQuickReplies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAdminListQuickRepliesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof adminListQuickReplies>>> = ({ signal }) => adminListQuickReplies(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof adminListQuickReplies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type AdminListQuickRepliesQueryResult = NonNullable<Awaited<ReturnType<typeof adminListQuickReplies>>>
+export type AdminListQuickRepliesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List quick replies (all agents, super_admin only)
+ */
+
+export function useAdminListQuickReplies<TData = Awaited<ReturnType<typeof adminListQuickReplies>>, TError = ErrorType<void>>(
+ params?: AdminListQuickRepliesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminListQuickReplies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getAdminListQuickRepliesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getAdminCreateQuickReplyUrl = () => {
+
+
+
+
+  return `/api/admin/quick-replies`
+}
+
+/**
+ * @summary Create quick reply for an agent (super_admin only)
+ */
+export const adminCreateQuickReply = async (adminCreateQuickReplyBody: AdminCreateQuickReplyBody, options?: RequestInit): Promise<QuickReplyWithAgent> => {
+
+  return customFetch<QuickReplyWithAgent>(getAdminCreateQuickReplyUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      adminCreateQuickReplyBody,)
+  }
+);}
+
+
+
+
+export const getAdminCreateQuickReplyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminCreateQuickReply>>, TError,{data: BodyType<AdminCreateQuickReplyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminCreateQuickReply>>, TError,{data: BodyType<AdminCreateQuickReplyBody>}, TContext> => {
+
+const mutationKey = ['adminCreateQuickReply'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminCreateQuickReply>>, {data: BodyType<AdminCreateQuickReplyBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  adminCreateQuickReply(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminCreateQuickReplyMutationResult = NonNullable<Awaited<ReturnType<typeof adminCreateQuickReply>>>
+    export type AdminCreateQuickReplyMutationBody = BodyType<AdminCreateQuickReplyBody>
+    export type AdminCreateQuickReplyMutationError = ErrorType<void>
+
+    /**
+ * @summary Create quick reply for an agent (super_admin only)
+ */
+export const useAdminCreateQuickReply = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminCreateQuickReply>>, TError,{data: BodyType<AdminCreateQuickReplyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminCreateQuickReply>>,
+        TError,
+        {data: BodyType<AdminCreateQuickReplyBody>},
+        TContext
+      > => {
+      return useMutation(getAdminCreateQuickReplyMutationOptions(options));
+    }
+
+export const getAdminUpdateQuickReplyUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/quick-replies/${id}`
+}
+
+/**
+ * @summary Update any quick reply (super_admin only)
+ */
+export const adminUpdateQuickReply = async (id: number,
+    updateQuickReplyBody: UpdateQuickReplyBody, options?: RequestInit): Promise<QuickReplyWithAgent> => {
+
+  return customFetch<QuickReplyWithAgent>(getAdminUpdateQuickReplyUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateQuickReplyBody,)
+  }
+);}
+
+
+
+
+export const getAdminUpdateQuickReplyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminUpdateQuickReply>>, TError,{id: number;data: BodyType<UpdateQuickReplyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminUpdateQuickReply>>, TError,{id: number;data: BodyType<UpdateQuickReplyBody>}, TContext> => {
+
+const mutationKey = ['adminUpdateQuickReply'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminUpdateQuickReply>>, {id: number;data: BodyType<UpdateQuickReplyBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  adminUpdateQuickReply(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminUpdateQuickReplyMutationResult = NonNullable<Awaited<ReturnType<typeof adminUpdateQuickReply>>>
+    export type AdminUpdateQuickReplyMutationBody = BodyType<UpdateQuickReplyBody>
+    export type AdminUpdateQuickReplyMutationError = ErrorType<void>
+
+    /**
+ * @summary Update any quick reply (super_admin only)
+ */
+export const useAdminUpdateQuickReply = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminUpdateQuickReply>>, TError,{id: number;data: BodyType<UpdateQuickReplyBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminUpdateQuickReply>>,
+        TError,
+        {id: number;data: BodyType<UpdateQuickReplyBody>},
+        TContext
+      > => {
+      return useMutation(getAdminUpdateQuickReplyMutationOptions(options));
+    }
+
+export const getAdminDeleteQuickReplyUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/quick-replies/${id}`
+}
+
+/**
+ * @summary Delete any quick reply (super_admin only)
+ */
+export const adminDeleteQuickReply = async (id: number, options?: RequestInit): Promise<DeleteResult> => {
+
+  return customFetch<DeleteResult>(getAdminDeleteQuickReplyUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getAdminDeleteQuickReplyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminDeleteQuickReply>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminDeleteQuickReply>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['adminDeleteQuickReply'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminDeleteQuickReply>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  adminDeleteQuickReply(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminDeleteQuickReplyMutationResult = NonNullable<Awaited<ReturnType<typeof adminDeleteQuickReply>>>
+
+    export type AdminDeleteQuickReplyMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete any quick reply (super_admin only)
+ */
+export const useAdminDeleteQuickReply = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminDeleteQuickReply>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminDeleteQuickReply>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getAdminDeleteQuickReplyMutationOptions(options));
     }
 

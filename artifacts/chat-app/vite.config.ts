@@ -26,6 +26,9 @@ if (!basePath) {
   );
 }
 
+const apiProxyTarget = process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8080";
+const wsProxyTarget = apiProxyTarget.replace(/^http/, "ws");
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -65,6 +68,12 @@ export default defineConfig({
     allowedHosts: true,
     fs: {
       strict: true,
+    },
+    proxy: {
+      "/api": { target: apiProxyTarget, changeOrigin: true },
+      "/ws": { target: wsProxyTarget, ws: true },
+      "/uploads": { target: apiProxyTarget, changeOrigin: true },
+      "/storage": { target: apiProxyTarget, changeOrigin: true },
     },
   },
   preview: {

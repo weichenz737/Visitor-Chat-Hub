@@ -12,6 +12,9 @@ export const sessionsTable = pgTable(
     agentId: integer("agent_id"), // also serves as owner_id for data isolation
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    agentLastReadMsgId: integer("agent_last_read_msg_id").notNull().default(0),
+    visitorLastReadMsgId: integer("visitor_last_read_msg_id").notNull().default(0),
+    lastMessageId: integer("last_message_id").notNull().default(0),
   },
   (table) => [index("sessions_agent_id_idx").on(table.agentId)]
 );

@@ -16,10 +16,18 @@ export interface SessionSummary {
   lastSeenAt?: Date | null;
   /** @nullable */
   agentId?: number | null;
+  /** @nullable */
+  agentDisplayName?: string | null;
+  /** @nullable */
+  agentAvatarUrl?: string | null;
+  /** @nullable */
+  agentIsActive?: boolean | null;
   unreadCount: number;
   isOnline: boolean;
   /** @nullable */
   lastMessage?: string | null;
   /** @nullable */
   lastMessageAt?: Date | null;
+  /** Whether a non-empty private note exists for this session */
+  hasNote?: boolean;
 }

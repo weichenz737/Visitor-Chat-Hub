@@ -25,6 +25,11 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
   }
 
   try {
+    if (!process.env.PRIVATE_OBJECT_DIR) {
+      res.status(503).json({ error: "object_storage_unavailable" });
+      return;
+    }
+
     const { name, size, contentType } = parsed.data;
 
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();

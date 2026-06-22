@@ -7,6 +7,7 @@ import {
   getListPublicAgentsQueryKey,
 } from "@workspace/api-client-react";
 import { MessageCircle, ArrowRight, ShieldCheck, Loader2 } from "lucide-react";
+import { generateVisitorId } from "@/lib/utils";
 
 // ── Persistent visitor identity ──────────────────────────────────────────────
 
@@ -14,7 +15,7 @@ function getOrCreateVisitorId(): string {
   const key = "visitor_id";
   let id = localStorage.getItem(key);
   if (!id) {
-    id = crypto.randomUUID();
+    id = generateVisitorId();
     localStorage.setItem(key, id);
   }
   return id;

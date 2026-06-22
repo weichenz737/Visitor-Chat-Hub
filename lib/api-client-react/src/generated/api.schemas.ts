@@ -49,12 +49,103 @@ export interface SessionSummary {
   lastSeenAt?: string | null;
   /** @nullable */
   agentId?: number | null;
+  /** @nullable */
+  agentDisplayName?: string | null;
+  /** @nullable */
+  agentAvatarUrl?: string | null;
+  /** @nullable */
+  agentIsActive?: boolean | null;
   unreadCount: number;
   isOnline: boolean;
   /** @nullable */
   lastMessage?: string | null;
   /** @nullable */
   lastMessageAt?: string | null;
+  /** Whether a non-empty private note exists for this session */
+  hasNote?: boolean;
+  /** Current agent's access mode for this session */
+  agentAccess?: 'owner' | 'readonly' | 'super_admin';
+}
+
+export interface SessionTransfer {
+  id: number;
+  sessionId: number;
+  fromAgentId: number;
+  toAgentId: number;
+  initiatedBy: number;
+  /** @nullable */
+  reason?: string | null;
+  createdAt: string;
+  /** @nullable */
+  fromAgentDisplayName?: string | null;
+  /** @nullable */
+  toAgentDisplayName?: string | null;
+  /** @nullable */
+  initiatedByDisplayName?: string | null;
+  /** @nullable */
+  visitorNickname?: string | null;
+}
+
+export interface TransferSessionBody {
+  targetAgentId: number;
+  reason?: string;
+}
+
+export interface TransferSessionResponse {
+  transfer: SessionTransfer;
+  session: Session;
+}
+
+export interface SessionTransfersResponse {
+  transfers: SessionTransfer[];
+}
+
+export interface AdminTransfersResponse {
+  transfers: SessionTransfer[];
+}
+
+export interface SystemLog {
+  id: number;
+  /** @nullable */
+  actorId?: number | null;
+  /** @nullable */
+  actorUsername?: string | null;
+  /** @nullable */
+  actorRole?: string | null;
+  action: string;
+  /** @nullable */
+  targetType?: string | null;
+  /** @nullable */
+  targetId?: number | null;
+  /** @nullable */
+  detail?: string | null;
+  /** @nullable */
+  ipAddress?: string | null;
+  createdAt: string;
+}
+
+export interface AdminLogsResponse {
+  logs: SystemLog[];
+}
+
+export interface SessionNote {
+  id: number;
+  sessionId: number;
+  agentId: number;
+  /** @nullable */
+  agentDisplayName?: string | null;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  canEdit: boolean;
+}
+
+export interface SessionNotesResponse {
+  notes: SessionNote[];
+}
+
+export interface PutSessionNotesBody {
+  content: string;
 }
 
 export interface SessionStats {
@@ -68,8 +159,7 @@ export interface SessionStats {
 export interface SessionInput {
   /** @minLength 1 */
   visitorNickname: string;
-  /** @nullable */
-  agentId?: number | null;
+  agentId: number;
   /** @nullable */
   visitorId?: string | null;
 }
@@ -88,6 +178,7 @@ export type MessageMessageType = typeof MessageMessageType[keyof typeof MessageM
 export const MessageMessageType = {
   text: 'text',
   image: 'image',
+  file: 'file',
 } as const;
 
 export interface Message {
@@ -100,6 +191,14 @@ export interface Message {
   content: string;
   /** @nullable */
   imageUrl?: string | null;
+  /** @nullable */
+  fileUrl?: string | null;
+  /** @nullable */
+  fileName?: string | null;
+  /** @nullable */
+  fileSize?: number | null;
+  /** @nullable */
+  mimeType?: string | null;
   createdAt: string;
   /** @nullable */
   readAt?: string | null;
@@ -119,6 +218,7 @@ export type MessageInputMessageType = typeof MessageInputMessageType[keyof typeo
 export const MessageInputMessageType = {
   text: 'text',
   image: 'image',
+  file: 'file',
 } as const;
 
 export interface MessageInput {
@@ -128,10 +228,36 @@ export interface MessageInput {
   content: string;
   /** @nullable */
   imageUrl?: string | null;
+  /** @nullable */
+  fileUrl?: string | null;
+  /** @nullable */
+  fileName?: string | null;
+  /** @nullable */
+  fileSize?: number | null;
+  /** @nullable */
+  mimeType?: string | null;
+}
+
+export interface SessionUnread {
+  sessionId: number;
+  agentUnread: number;
+  visitorUnread: number;
+  lastMessageId: number;
+  agentLastReadMsgId: number;
+  visitorLastReadMsgId: number;
+}
+
+export interface MarkSessionVisitorReadBody {
+  visitorId?: string;
 }
 
 export interface ReadResult {
   count: number;
+  agentUnread: number;
+  visitorUnread: number;
+  lastMessageId: number;
+  agentLastReadMsgId: number;
+  visitorLastReadMsgId: number;
 }
 
 export interface DeleteResult {
@@ -172,6 +298,16 @@ export interface AgentInfo {
   userId: number;
   username: string;
   role: AgentInfoRole;
+  displayName: string;
+  /** @nullable */
+  avatarUrl?: string | null;
+}
+
+export interface UpdateAgentMeBody {
+  /** @minLength 1 */
+  displayName?: string;
+  /** @nullable */
+  avatarUrl?: string | null;
 }
 
 export interface AgentPublic {
@@ -181,6 +317,7 @@ export interface AgentPublic {
   avatarUrl?: string | null;
   /** @nullable */
   introduction?: string | null;
+  isOnline: boolean;
 }
 
 export type AdminAgentRole = typeof AdminAgentRole[keyof typeof AdminAgentRole];
@@ -213,6 +350,8 @@ export const CreateAgentBodyRole = {
 } as const;
 
 export interface CreateAgentBody {
+  /** Optional custom agent ID. Auto-assigned when omitted. */
+  id?: number;
   /** @minLength 3 */
   username: string;
   /** @minLength 6 */
@@ -274,8 +413,72 @@ export interface ErrorEnvelope {
   error: string;
 }
 
+export interface QuickReply {
+  id: number;
+  agentId: number;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type QuickReplyWithAgent = QuickReply & ({
+  /** @nullable */
+  agentDisplayName?: string | null;
+  /** @nullable */
+  agentUsername?: string | null;
+});
+
+export interface CreateQuickReplyBody {
+  /** @minLength 1 */
+  title: string;
+  /** @minLength 1 */
+  content: string;
+}
+
+export interface AdminCreateQuickReplyBody {
+  agentId: number;
+  /** @minLength 1 */
+  title: string;
+  /** @minLength 1 */
+  content: string;
+}
+
+export interface UpdateQuickReplyBody {
+  /** @minLength 1 */
+  title?: string;
+  /** @minLength 1 */
+  content?: string;
+}
+
 export type VisitorResumeSessionParams = {
 visitorId: string;
 agentId: number;
+};
+
+export type GetSessionUnreadParams = {
+/**
+ * Pass for visitor access without agent token
+ */
+visitorId?: string;
+};
+
+export type GetSessionMessagesParams = {
+/**
+ * Pass for visitor access without agent token
+ */
+visitorId?: string;
+};
+
+export type AgentListQuickRepliesParams = {
+/**
+ * Search title or content
+ */
+q?: string;
+};
+
+export type AdminListQuickRepliesParams = {
+agentId?: number;
+q?: string;
 };
 

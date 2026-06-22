@@ -3,6 +3,8 @@ import { db } from "@workspace/db";
 import { messagesTable, sessionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { SendMessageBody } from "@workspace/api-zod";
+import { extractAuth } from "../lib/middleware";
+import { assertAgentCanReply } from "../lib/session-access";
 
 const router: IRouter = Router();
 
@@ -11,6 +13,23 @@ router.post("/messages", async (req, res): Promise<void> => {
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
+  }
+
+  if (parsed.data.senderType === "agent") {
+    const payload = extractAuth(req);
+    if (!payload) {
+      res.status(401).json({ error: "Not authenticated" });
+      return;
+    }
+    const replyCheck = await assertAgentCanReply(
+      parsed.data.sessionId,
+      payload.userId,
+      payload.role,
+    );
+    if (!replyCheck.ok) {
+      res.status(403).json({ error: replyCheck.error });
+      return;
+    }
   }
 
   // Resolve ownerId from the session
@@ -30,6 +49,10 @@ router.post("/messages", async (req, res): Promise<void> => {
       messageType: parsed.data.messageType,
       content: parsed.data.content,
       imageUrl: parsed.data.imageUrl ?? undefined,
+      fileUrl: parsed.data.fileUrl ?? undefined,
+      fileName: parsed.data.fileName ?? undefined,
+      fileSize: parsed.data.fileSize ?? undefined,
+      mimeType: parsed.data.mimeType ?? undefined,
     })
     .returning();
 

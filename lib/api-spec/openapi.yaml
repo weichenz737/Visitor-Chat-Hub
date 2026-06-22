@@ -46,6 +46,34 @@ paths:
         '500':
           description: Failed to generate upload URL.
 
+  /upload/file:
+    post:
+      operationId: uploadFile
+      tags: [upload]
+      summary: Upload a file attachment (max 20MB)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadResult'
+        '400':
+          description: Invalid or blocked file type
+        '500':
+          description: Upload failed
+
   /healthz:
     get:
       operationId: healthCheck
@@ -171,14 +199,17 @@ paths:
       operationId: getSessionMessages
       tags: [messages]
       summary: Get all messages for a session
-      security:
-        - bearerAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
+        - name: visitorId
+          in: query
+          schema:
+            type: string
+          description: Pass for visitor access without agent token
       responses:
         "200":
           description: Messages
@@ -197,7 +228,7 @@ paths:
     post:
       operationId: markSessionRead
       tags: [sessions]
-      summary: Mark all messages in session as read
+      summary: Mark visitor messages as read (agent)
       security:
         - bearerAuth: []
       parameters:
@@ -217,6 +248,182 @@ paths:
           description: Not authenticated
         "403":
           description: Forbidden
+
+  /sessions/{id}/visitor-read:
+    post:
+      operationId: markSessionVisitorRead
+      tags: [sessions]
+      summary: Mark agent messages as read (visitor)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkSessionVisitorReadBody"
+      responses:
+        "200":
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadResult"
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+
+  /sessions/{id}/unread:
+    get:
+      operationId: getSessionUnread
+      tags: [sessions]
+      summary: Get unread message counts for a session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: visitorId
+          in: query
+          schema:
+            type: string
+          description: Pass for visitor access without agent token
+      responses:
+        "200":
+          description: Unread counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionUnread"
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+
+  /sessions/{id}/notes:
+    get:
+      operationId: getSessionNotes
+      tags: [sessions]
+      summary: Get private session notes (internal, not visible to visitors)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Session notes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionNotesResponse"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+    put:
+      operationId: putSessionNotes
+      tags: [sessions]
+      summary: Upsert own private session note (current session owner only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutSessionNotesBody"
+      responses:
+        "200":
+          description: Updated note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionNote"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+
+  /sessions/{id}/transfer:
+    post:
+      operationId: transferSession
+      tags: [sessions]
+      summary: Transfer session to another reception agent (or super_admin takeover)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferSessionBody"
+      responses:
+        "200":
+          description: Transfer completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferSessionResponse"
+        "400":
+          description: Invalid request
+        "401":
+          description: Not authenticated
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+
+  /sessions/{id}/transfers:
+    get:
+      operationId: getSessionTransfers
+      tags: [sessions]
+      summary: List transfer history for a session
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Transfer history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionTransfersResponse"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
 
   /messages:
     post:
@@ -241,7 +448,7 @@ paths:
     get:
       operationId: listPublicAgents
       tags: [agent]
-      summary: List all active agents (public, for visitor selection)
+      summary: List active reception agents (excludes super_admin)
       responses:
         "200":
           description: Active agents list
@@ -251,6 +458,27 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AgentPublic"
+
+  /agents/{id}:
+    get:
+      operationId: getPublicAgent
+      tags: [agent]
+      summary: Get reception agent by ID for dedicated chat link
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Agent public profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentPublic"
+        "404":
+          description: Agent not found or not available
 
   /agent/login:
     post:
@@ -287,6 +515,65 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AgentInfo"
+        "401":
+          description: Not authenticated
+    patch:
+      operationId: updateAgentMe
+      tags: [agent]
+      summary: Update current agent profile (display name and avatar)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgentMeBody"
+      responses:
+        "200":
+          description: Updated agent profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentInfo"
+        "400":
+          description: Validation error
+        "401":
+          description: Not authenticated
+
+  /agent/me/password:
+    patch:
+      operationId: changeAgentPassword
+      tags: [agent]
+      summary: Change current agent password
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                  minLength: 1
+                newPassword:
+                  type: string
+                  minLength: 6
+      responses:
+        "200":
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "400":
+          description: Validation error
         "401":
           description: Not authenticated
 
@@ -396,6 +683,279 @@ paths:
         "404":
           description: Not found
 
+  /agent/quick-replies:
+    get:
+      operationId: agentListQuickReplies
+      tags: [agent]
+      summary: List own quick replies
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search title or content
+      responses:
+        "200":
+          description: Quick replies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuickReply"
+        "401":
+          description: Not authenticated
+    post:
+      operationId: agentCreateQuickReply
+      tags: [agent]
+      summary: Create a quick reply
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuickReplyBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickReply"
+        "400":
+          description: Validation error
+        "401":
+          description: Not authenticated
+
+  /agent/quick-replies/{id}:
+    patch:
+      operationId: agentUpdateQuickReply
+      tags: [agent]
+      summary: Update own quick reply
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateQuickReplyBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickReply"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+    delete:
+      operationId: agentDeleteQuickReply
+      tags: [agent]
+      summary: Delete own quick reply
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResult"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+
+  /admin/quick-replies:
+    get:
+      operationId: adminListQuickReplies
+      tags: [admin]
+      summary: List quick replies (all agents, super_admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: integer
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Quick replies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuickReplyWithAgent"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Forbidden
+    post:
+      operationId: adminCreateQuickReply
+      tags: [admin]
+      summary: Create quick reply for an agent (super_admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminCreateQuickReplyBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickReplyWithAgent"
+        "400":
+          description: Validation error
+        "401":
+          description: Not authenticated
+        "403":
+          description: Forbidden
+
+  /admin/quick-replies/{id}:
+    patch:
+      operationId: adminUpdateQuickReply
+      tags: [admin]
+      summary: Update any quick reply (super_admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateQuickReplyBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickReplyWithAgent"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+    delete:
+      operationId: adminDeleteQuickReply
+      tags: [admin]
+      summary: Delete any quick reply (super_admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResult"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+
+  /admin/transfers:
+    get:
+      operationId: adminListTransfers
+      tags: [admin]
+      summary: List recent session transfers (super_admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: Transfer records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminTransfersResponse"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Forbidden
+
+  /admin/logs:
+    get:
+      operationId: adminListLogs
+      tags: [admin]
+      summary: List system audit logs (super_admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: action
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: System log records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminLogsResponse"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Forbidden
+
 
 components:
   securitySchemes:
@@ -454,6 +1014,12 @@ components:
           format: date-time
         agentId:
           type: ["integer", "null"]
+        agentDisplayName:
+          type: ["string", "null"]
+        agentAvatarUrl:
+          type: ["string", "null"]
+        agentIsActive:
+          type: ["boolean", "null"]
         unreadCount:
           type: integer
         isOnline:
@@ -463,6 +1029,153 @@ components:
         lastMessageAt:
           type: ["string", "null"]
           format: date-time
+        hasNote:
+          type: boolean
+          description: Whether a non-empty private note exists for this session
+        agentAccess:
+          type: string
+          enum: [owner, readonly, super_admin]
+          description: Current agent's access mode for this session
+
+    SessionTransfer:
+      type: object
+      required: [id, sessionId, fromAgentId, toAgentId, initiatedBy, createdAt]
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        fromAgentId:
+          type: integer
+        toAgentId:
+          type: integer
+        initiatedBy:
+          type: integer
+        reason:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        fromAgentDisplayName:
+          type: ["string", "null"]
+        toAgentDisplayName:
+          type: ["string", "null"]
+        initiatedByDisplayName:
+          type: ["string", "null"]
+        visitorNickname:
+          type: ["string", "null"]
+
+    TransferSessionBody:
+      type: object
+      required: [targetAgentId]
+      properties:
+        targetAgentId:
+          type: integer
+        reason:
+          type: string
+          maxLength: 500
+
+    TransferSessionResponse:
+      type: object
+      required: [transfer, session]
+      properties:
+        transfer:
+          $ref: "#/components/schemas/SessionTransfer"
+        session:
+          $ref: "#/components/schemas/Session"
+
+    SessionTransfersResponse:
+      type: object
+      required: [transfers]
+      properties:
+        transfers:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionTransfer"
+
+    AdminTransfersResponse:
+      type: object
+      required: [transfers]
+      properties:
+        transfers:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionTransfer"
+
+    SystemLog:
+      type: object
+      required: [id, action, createdAt]
+      properties:
+        id:
+          type: integer
+        actorId:
+          type: ["integer", "null"]
+        actorUsername:
+          type: ["string", "null"]
+        actorRole:
+          type: ["string", "null"]
+        action:
+          type: string
+        targetType:
+          type: ["string", "null"]
+        targetId:
+          type: ["integer", "null"]
+        detail:
+          type: ["string", "null"]
+        ipAddress:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    AdminLogsResponse:
+      type: object
+      required: [logs]
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SystemLog"
+
+    SessionNote:
+      type: object
+      required: [id, sessionId, agentId, content, createdAt, updatedAt, canEdit]
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        agentId:
+          type: integer
+        agentDisplayName:
+          type: ["string", "null"]
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        canEdit:
+          type: boolean
+
+    SessionNotesResponse:
+      type: object
+      required: [notes]
+      properties:
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionNote"
+
+    PutSessionNotesBody:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          maxLength: 10000
 
     SessionStats:
       type: object
@@ -481,13 +1194,13 @@ components:
 
     SessionInput:
       type: object
-      required: [visitorNickname]
+      required: [visitorNickname, agentId]
       properties:
         visitorNickname:
           type: string
           minLength: 1
         agentId:
-          type: ["integer", "null"]
+          type: integer
         visitorId:
           type: ["string", "null"]
 
@@ -506,10 +1219,18 @@ components:
           enum: [visitor, agent]
         messageType:
           type: string
-          enum: [text, image]
+          enum: [text, image, file]
         content:
           type: string
         imageUrl:
+          type: ["string", "null"]
+        fileUrl:
+          type: ["string", "null"]
+        fileName:
+          type: ["string", "null"]
+        fileSize:
+          type: ["integer", "null"]
+        mimeType:
           type: ["string", "null"]
         createdAt:
           type: string
@@ -529,17 +1250,59 @@ components:
           enum: [visitor, agent]
         messageType:
           type: string
-          enum: [text, image]
+          enum: [text, image, file]
         content:
           type: string
         imageUrl:
           type: ["string", "null"]
+        fileUrl:
+          type: ["string", "null"]
+        fileName:
+          type: ["string", "null"]
+        fileSize:
+          type: ["integer", "null"]
+        mimeType:
+          type: ["string", "null"]
+
+    SessionUnread:
+      type: object
+      required:
+        [sessionId, agentUnread, visitorUnread, lastMessageId, agentLastReadMsgId, visitorLastReadMsgId]
+      properties:
+        sessionId:
+          type: integer
+        agentUnread:
+          type: integer
+        visitorUnread:
+          type: integer
+        lastMessageId:
+          type: integer
+        agentLastReadMsgId:
+          type: integer
+        visitorLastReadMsgId:
+          type: integer
+
+    MarkSessionVisitorReadBody:
+      type: object
+      properties:
+        visitorId:
+          type: string
 
     ReadResult:
       type: object
-      required: [count]
+      required: [count, agentUnread, visitorUnread, lastMessageId, agentLastReadMsgId, visitorLastReadMsgId]
       properties:
         count:
+          type: integer
+        agentUnread:
+          type: integer
+        visitorUnread:
+          type: integer
+        lastMessageId:
+          type: integer
+        agentLastReadMsgId:
+          type: integer
+        visitorLastReadMsgId:
           type: integer
 
     DeleteResult:
@@ -576,7 +1339,7 @@ components:
 
     AgentInfo:
       type: object
-      required: [agentId, userId, username, role]
+      required: [agentId, userId, username, role, displayName]
       properties:
         agentId:
           type: integer
@@ -587,10 +1350,23 @@ components:
         role:
           type: string
           enum: [agent, super_admin]
+        displayName:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+
+    UpdateAgentMeBody:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+        avatarUrl:
+          type: ["string", "null"]
 
     AgentPublic:
       type: object
-      required: [id, displayName]
+      required: [id, displayName, isOnline]
       properties:
         id:
           type: integer
@@ -600,6 +1376,8 @@ components:
           type: ["string", "null"]
         introduction:
           type: ["string", "null"]
+        isOnline:
+          type: boolean
 
     AdminAgent:
       type: object
@@ -628,6 +1406,10 @@ components:
       type: object
       required: [username, password, displayName]
       properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Optional custom agent ID. Auto-assigned when omitted.
         username:
           type: string
           minLength: 3
@@ -673,6 +1455,21 @@ components:
         filename:
           type: string
 
+    FileUploadResult:
+      type: object
+      required: [url, fileName, fileSize, mimeType]
+      properties:
+        url:
+          type: string
+        fileName:
+          type: string
+        fileSize:
+          type: integer
+        mimeType:
+          type: string
+        storageKey:
+          type: string
+
     UploadUrlRequest:
       type: object
       required: [name, size, contentType]
@@ -705,3 +1502,66 @@ components:
       properties:
         error:
           type: string
+
+    QuickReply:
+      type: object
+      required: [id, agentId, title, content, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        agentId:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    QuickReplyWithAgent:
+      allOf:
+        - $ref: "#/components/schemas/QuickReply"
+        - type: object
+          properties:
+            agentDisplayName:
+              type: ["string", "null"]
+            agentUsername:
+              type: ["string", "null"]
+
+    CreateQuickReplyBody:
+      type: object
+      required: [title, content]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        content:
+          type: string
+          minLength: 1
+
+    AdminCreateQuickReplyBody:
+      type: object
+      required: [agentId, title, content]
+      properties:
+        agentId:
+          type: integer
+        title:
+          type: string
+          minLength: 1
+        content:
+          type: string
+          minLength: 1
+
+    UpdateQuickReplyBody:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        content:
+          type: string
+          minLength: 1

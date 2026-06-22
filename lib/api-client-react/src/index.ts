@@ -1,4 +1,10 @@
 export * from "./generated/api";
 export * from "./generated/api.schemas";
-export { setBaseUrl, setAuthTokenGetter } from "./custom-fetch";
+export * from "./session-api";
+export * from "./session-notes-api";
+export * from "./transfer-api";
+export * from "./system-logs-api";
+export * from "./admin-api";
+export * from "./agent-profile-api";
+export { setBaseUrl, setAuthTokenGetter, ApiError } from "./custom-fetch";
 export type { AuthTokenGetter } from "./custom-fetch";

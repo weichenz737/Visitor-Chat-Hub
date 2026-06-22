@@ -2,9 +2,18 @@ import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage } from "http";
 import { db } from "@workspace/db";
 import { messagesTable, sessionsTable } from "@workspace/db";
-import { eq, and, isNull } from "drizzle-orm";
+import { touchAgentLastSeen } from "./agents";
+import { eq, and } from "drizzle-orm";
 import { verifyToken } from "./auth";
 import { logger } from "./logger";
+import {
+  onMessageCreated,
+  markAgentReadSession,
+  markVisitorReadSession,
+  type SessionReadState,
+} from "./session-read";
+import { assertAgentCanReply } from "./session-access";
+import { formatMessagePreview } from "./message-preview";
 
 interface ClientInfo {
   type: "visitor" | "agent" | "unknown";
@@ -15,6 +24,8 @@ interface ClientInfo {
 }
 
 const clients = new Map<WebSocket, ClientInfo>();
+
+const VISITOR_HEARTBEAT_MS = 12_000;
 
 export function createWebSocketServer(): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true });
@@ -27,7 +38,7 @@ export function createWebSocketServer(): WebSocketServer {
       if (ws.readyState === WebSocket.OPEN) {
         ws.ping();
       }
-    }, 30000);
+    }, VISITOR_HEARTBEAT_MS);
 
     ws.on("message", async (data) => {
       try {
@@ -41,27 +52,6 @@ export function createWebSocketServer(): WebSocketServer {
 
     ws.on("close", async () => {
       clearInterval(heartbeatInterval);
-      const info = clients.get(ws);
-      if (info?.type === "visitor" && info.sessionId) {
-        await db
-          .update(sessionsTable)
-          .set({ lastSeenAt: new Date() })
-          .where(eq(sessionsTable.id, info.sessionId));
-
-        // Notify only the session owner (and super_admins)
-        const [session] = await db
-          .select({ agentId: sessionsTable.agentId })
-          .from(sessionsTable)
-          .where(eq(sessionsTable.id, info.sessionId));
-
-        if (session) {
-          broadcastToSessionOwner(session.agentId ?? 0, {
-            type: "session_update",
-            sessionId: info.sessionId,
-            isOnline: false,
-          });
-        }
-      }
       clients.delete(ws);
       logger.info("WebSocket client disconnected");
     });
@@ -76,16 +66,23 @@ export function createWebSocketServer(): WebSocketServer {
   return wss;
 }
 
+async function touchVisitorLastSeen(sessionId: number): Promise<void> {
+  await db
+    .update(sessionsTable)
+    .set({ lastSeenAt: new Date() })
+    .where(eq(sessionsTable.id, sessionId));
+}
+
 async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promise<void> {
   const type = msg.type as string;
 
   if (type === "ping") {
     const info = clients.get(ws);
     if (info?.type === "visitor" && info.sessionId) {
-      await db
-        .update(sessionsTable)
-        .set({ lastSeenAt: new Date() })
-        .where(eq(sessionsTable.id, info.sessionId));
+      await touchVisitorLastSeen(info.sessionId);
+    } else if (info?.type === "agent" && info.agentId) {
+      await touchAgentLastSeen(info.agentId);
+      broadcastAgentPresence(info.agentId, true);
     }
     safeSend(ws, { type: "pong" });
     return;
@@ -94,28 +91,21 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
   if (type === "visitor_connect") {
     const sessionId = Number(msg.sessionId);
     const visitorNickname = String(msg.visitorNickname ?? "");
-    clients.set(ws, { type: "visitor", sessionId, visitorNickname });
-
-    await db
-      .update(sessionsTable)
-      .set({ lastSeenAt: new Date() })
-      .where(eq(sessionsTable.id, sessionId));
-
-    // Notify only the session owner (and super_admins)
     const [session] = await db
       .select({ agentId: sessionsTable.agentId })
       .from(sessionsTable)
       .where(eq(sessionsTable.id, sessionId));
 
-    if (session) {
-      broadcastToSessionOwner(session.agentId ?? 0, {
-        type: "session_update",
-        sessionId,
-        isOnline: true,
-      });
-    }
+    clients.set(ws, {
+      type: "visitor",
+      sessionId,
+      visitorNickname,
+      agentId: session?.agentId ?? undefined,
+    });
 
-    logger.info({ sessionId, visitorNickname }, "Visitor connected");
+    await touchVisitorLastSeen(sessionId);
+
+    logger.info({ sessionId, visitorNickname, agentId: session?.agentId }, "Visitor connected");
     return;
   }
 
@@ -127,6 +117,8 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
       return;
     }
     clients.set(ws, { type: "agent", agentId: payload.userId, role: payload.role });
+    await touchAgentLastSeen(payload.userId);
+    broadcastAgentPresence(payload.userId, true);
     logger.info({ agentId: payload.userId, role: payload.role }, "Agent connected via WS");
     return;
   }
@@ -134,17 +126,36 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
   if (type === "message") {
     const info = clients.get(ws);
     const sessionId = Number(msg.sessionId);
-    const senderType = String(msg.senderType ?? "");
+    const senderTypeRaw = String(msg.senderType ?? "");
+    if (senderTypeRaw !== "visitor" && senderTypeRaw !== "agent") {
+      safeSend(ws, { type: "error", error: "Missing required fields" });
+      return;
+    }
+    const senderType = senderTypeRaw as "visitor" | "agent";
     const messageType = String(msg.messageType ?? "text");
     const content = String(msg.content ?? "");
     const imageUrl = msg.imageUrl ? String(msg.imageUrl) : null;
+    const fileUrl = msg.fileUrl ? String(msg.fileUrl) : null;
+    const fileName = msg.fileName ? String(msg.fileName) : null;
+    const fileSizeRaw = msg.fileSize != null ? Number(msg.fileSize) : null;
+    const fileSize = fileSizeRaw != null && Number.isFinite(fileSizeRaw) ? fileSizeRaw : null;
+    const mimeType = msg.mimeType ? String(msg.mimeType) : null;
 
-    if (!sessionId || !senderType || content == null) {
+    if (!sessionId || !senderType) {
       safeSend(ws, { type: "error", error: "Missing required fields" });
       return;
     }
 
-    // Resolve ownerId from the session for data isolation
+    if (messageType === "file" && (!fileUrl || !fileName)) {
+      safeSend(ws, { type: "error", error: "Missing file fields" });
+      return;
+    }
+
+    if (messageType !== "file" && content == null) {
+      safeSend(ws, { type: "error", error: "Missing required fields" });
+      return;
+    }
+
     const [session] = await db
       .select({ agentId: sessionsTable.agentId })
       .from(sessionsTable)
@@ -152,52 +163,124 @@ async function handleMessage(ws: WebSocket, msg: Record<string, unknown>): Promi
 
     const ownerId = session?.agentId ?? undefined;
 
-    const [savedMessage] = await db
-      .insert(messagesTable)
-      .values({ sessionId, ownerId, senderType, messageType, content, imageUrl: imageUrl ?? undefined })
-      .returning();
-
-    if (senderType === "visitor") {
-      await db
-        .update(sessionsTable)
-        .set({ status: "waiting", lastSeenAt: new Date() })
-        .where(and(eq(sessionsTable.id, sessionId), eq(sessionsTable.status, "closed")));
-    } else if (senderType === "agent") {
-      await db
-        .update(sessionsTable)
-        .set({ status: "active" })
-        .where(eq(sessionsTable.id, sessionId));
+    if (senderType === "agent") {
+      const info = clients.get(ws);
+      if (info?.type !== "agent" || info.agentId == null) {
+        safeSend(ws, { type: "error", error: "Unauthorized" });
+        return;
+      }
+      const replyCheck = await assertAgentCanReply(sessionId, info.agentId, info.role ?? "agent");
+      if (!replyCheck.ok) {
+        safeSend(ws, { type: "error", error: replyCheck.error });
+        return;
+      }
     }
 
-    // Send to the visitor side of this session
+    const [savedMessage] = await db
+      .insert(messagesTable)
+      .values({
+        sessionId,
+        ownerId,
+        senderType,
+        messageType,
+        content: messageType === "file" ? fileName ?? "[file]" : content,
+        imageUrl: imageUrl ?? undefined,
+        fileUrl: fileUrl ?? undefined,
+        fileName: fileName ?? undefined,
+        fileSize: fileSize ?? undefined,
+        mimeType: mimeType ?? undefined,
+      })
+      .returning();
+
+    // Chat-first: push message to clients before unread / status side effects
     broadcastToSessionVisitor(sessionId, { type: "message", message: savedMessage });
-
-    // Echo back to the sender
     safeSend(ws, { type: "message", message: savedMessage });
-
-    // Notify only the session owner agent(s) (and super_admins)
     if (info?.type !== "agent") {
-      // Visitor sent a message — notify the owning agent
       broadcastToSessionOwner(ownerId ?? 0, { type: "message", message: savedMessage });
     }
 
-    broadcastToSessionOwner(ownerId ?? 0, {
-      type: "session_update",
-      sessionId,
-      lastMessage: messageType === "image" ? "📷 圖片" : content,
-      lastMessageAt: new Date().toISOString(),
-    });
+    void (async () => {
+      try {
+        if (senderType === "visitor") {
+          await touchVisitorLastSeen(sessionId);
+          await db
+            .update(sessionsTable)
+            .set({ status: "waiting" })
+            .where(and(eq(sessionsTable.id, sessionId), eq(sessionsTable.status, "closed")));
+        } else {
+          await db
+            .update(sessionsTable)
+            .set({ status: "active" })
+            .where(eq(sessionsTable.id, sessionId));
+        }
+
+        const readState = await onMessageCreated(sessionId, savedMessage.id, senderType);
+        broadcastReadState(sessionId, readState, ownerId ?? 0);
+
+        broadcastToSessionOwner(ownerId ?? 0, {
+          type: "session_update",
+          sessionId,
+          lastMessage: formatMessagePreview(messageType, content, { fileName, imageUrl }),
+          lastMessageAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        logger.error({ err, sessionId }, "Post-message side effects failed");
+      }
+    })();
+    return;
+  }
+
+  if (type === "agent_read") {
+    const info = clients.get(ws);
+    if (info?.type !== "agent" || info.agentId == null) {
+      safeSend(ws, { type: "error", error: "Unauthorized" });
+      return;
+    }
+    const sessionId = Number(msg.sessionId);
+    const [session] = await db
+      .select({ agentId: sessionsTable.agentId })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, sessionId));
+    if (!session) return;
+
+    if (session.agentId !== info.agentId && info.role !== "super_admin") {
+      safeSend(ws, { type: "error", error: "Unauthorized" });
+      return;
+    }
+
+    const readState = await markAgentReadSession(sessionId);
+    broadcastReadState(sessionId, readState, session.agentId ?? 0);
+    return;
+  }
+
+  if (type === "visitor_read") {
+    const info = clients.get(ws);
+    if (info?.type !== "visitor" || info.sessionId !== Number(msg.sessionId)) {
+      safeSend(ws, { type: "error", error: "Unauthorized" });
+      return;
+    }
+    const sessionId = Number(msg.sessionId);
+    const [session] = await db
+      .select({ agentId: sessionsTable.agentId })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, sessionId));
+
+    const readState = await markVisitorReadSession(sessionId);
+    broadcastReadState(sessionId, readState, session?.agentId ?? 0);
     return;
   }
 
   if (type === "read") {
     const sessionId = Number(msg.sessionId);
-    const now = new Date();
-    await db
-      .update(messagesTable)
-      .set({ readAt: now })
-      .where(and(eq(messagesTable.sessionId, sessionId), isNull(messagesTable.readAt)));
-    broadcastToSessionVisitor(sessionId, { type: "read_receipt", sessionId, readAt: now.toISOString() });
+    const [session] = await db
+      .select({ agentId: sessionsTable.agentId })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, sessionId));
+
+    const readState = await markAgentReadSession(sessionId);
+    if (session) {
+      broadcastReadState(sessionId, readState, session.agentId ?? 0);
+    }
     return;
   }
 
@@ -210,10 +293,6 @@ function safeSend(ws: WebSocket, data: unknown): void {
   }
 }
 
-/**
- * Broadcast to agents who own the session (agentId match) OR are super_admin.
- * ownerId=0 means no owner — super_admins still receive it.
- */
 function broadcastToSessionOwner(ownerId: number, data: unknown): void {
   for (const [ws, info] of clients) {
     if (info.type === "agent") {
@@ -232,16 +311,73 @@ function broadcastToSessionVisitor(sessionId: number, data: unknown): void {
   }
 }
 
-export function broadcastReadReceiptToSession(sessionId: number, readAt: string): void {
-  broadcastToSessionVisitor(sessionId, { type: "read_receipt", sessionId, readAt });
-}
-
-export function getOnlineSessionIds(): Set<number> {
-  const online = new Set<number>();
-  for (const info of clients.values()) {
-    if (info.type === "visitor" && info.sessionId) {
-      online.add(info.sessionId);
+function broadcastAgentPresence(agentId: number, isOnline: boolean): void {
+  const payload = { type: "agent_presence", agentId, isOnline };
+  for (const [ws, info] of clients) {
+    if (info.type === "visitor" && info.agentId === agentId) {
+      safeSend(ws, payload);
     }
   }
-  return online;
+}
+
+export function broadcastReadState(
+  sessionId: number,
+  readState: SessionReadState,
+  ownerId: number,
+): void {
+  const payload = {
+    type: "read_state",
+    sessionId,
+    lastMessageId: readState.lastMessageId,
+    agentLastReadMsgId: readState.agentLastReadMsgId,
+    visitorLastReadMsgId: readState.visitorLastReadMsgId,
+    agentUnread: readState.agentUnread,
+    visitorUnread: readState.visitorUnread,
+  };
+  broadcastToSessionVisitor(sessionId, payload);
+  broadcastToSessionOwner(ownerId, payload);
+
+  const legacyPayload = {
+    type: "unread_update" as const,
+    sessionId,
+    agentUnread: readState.agentUnread,
+    visitorUnread: readState.visitorUnread,
+  };
+  broadcastToSessionVisitor(sessionId, legacyPayload);
+  broadcastToSessionOwner(ownerId, legacyPayload);
+}
+
+/** Legacy stub — visitor online uses sessions.last_seen_at; agent uses agents.last_seen_at */
+export function getOnlineSessionIds(): Set<number> {
+  return new Set<number>();
+}
+
+export function broadcastSessionTransfer(
+  sessionId: number,
+  newAgentId: number,
+  fromAgentId: number,
+): void {
+  for (const [, info] of clients) {
+    if (info.type === "visitor" && info.sessionId === sessionId) {
+      info.agentId = newAgentId;
+    }
+  }
+
+  const payload = {
+    type: "session_transfer",
+    sessionId,
+    newAgentId,
+    fromAgentId,
+  };
+
+  for (const [ws, info] of clients) {
+    if (info.type === "agent") {
+      if (info.role === "super_admin" || info.agentId === newAgentId || info.agentId === fromAgentId) {
+        safeSend(ws, payload);
+      }
+    }
+    if (info.type === "visitor" && info.sessionId === sessionId) {
+      safeSend(ws, payload);
+    }
+  }
 }

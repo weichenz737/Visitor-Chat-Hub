@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["src/**/*", "../../packages/ui/src/**/*"],
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
+    "noEmit": true,
+    "jsx": "preserve",
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "moduleResolution": "bundler",
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/components/ui/*": ["../../packages/ui/src/components/ui/*"],
+      "@/lib/utils": ["../../packages/ui/src/lib/utils.ts"],
+      "@/hooks/*": ["../../packages/ui/src/hooks/*"]
+    }
+  },
+  "references": [{ "path": "../../lib/api-client-react" }]
+}

@@ -13,4 +13,5 @@ export interface AgentPublic {
   avatarUrl?: string | null;
   /** @nullable */
   introduction?: string | null;
+  isOnline: boolean;
 }

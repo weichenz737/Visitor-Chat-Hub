@@ -12,4 +12,7 @@ export interface AgentInfo {
   userId: number;
   username: string;
   role: AgentInfoRole;
+  displayName: string;
+  /** @nullable */
+  avatarUrl?: string | null;
 }

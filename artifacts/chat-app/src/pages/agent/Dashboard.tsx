@@ -1,18 +1,19 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
-  useListSessions,
   useGetSessionMessages,
-  useGetSessionStats,
   useMarkSessionRead,
   useAdminListAgents,
   useAdminCreateAgent,
   useAdminUpdateAgent,
   useAdminDeleteAgent,
-  getListSessionsQueryKey,
-  getGetSessionStatsQueryKey,
   getGetSessionMessagesQueryKey,
   getAdminListAgentsQueryKey,
+  listSessionsFiltered,
+  getSessionStatsFiltered,
+  getSessionsQueryKey,
+  getSessionStatsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useChat, type ChatMessage } from "@/hooks/useChat";
@@ -27,6 +28,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { AgentChatLinkCard } from "@/components/AgentChatLinkCard";
 import {
   Send,
   Image,
@@ -44,6 +53,7 @@ import {
   Trash2,
   ShieldCheck,
   Crown,
+  Download,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { zhTW } from "date-fns/locale";
@@ -59,6 +69,10 @@ interface SessionSummary {
   isOnline: boolean;
   lastMessage: string | null;
   lastMessageAt: string | null;
+  agentId?: number | null;
+  agentDisplayName?: string | null;
+  agentAvatarUrl?: string | null;
+  agentIsActive?: boolean | null;
 }
 
 interface AdminAgent {
@@ -151,10 +165,12 @@ function SessionListItem({
   session,
   isActive,
   onClick,
+  showAgentInfo,
 }: {
   session: SessionSummary;
   isActive: boolean;
   onClick: () => void;
+  showAgentInfo?: boolean;
 }) {
   const statusLabel: Record<string, string> = {
     waiting: "等待中",
@@ -193,6 +209,12 @@ function SessionListItem({
             <p className="text-xs text-muted-foreground truncate mt-0.5">
               {session.lastMessage ?? "尚無訊息"}
             </p>
+            {showAgentInfo && (
+              <p className="text-xs text-primary/80 truncate mt-0.5">
+                所属客服：{session.agentDisplayName ?? "—"}（ID {session.agentId ?? "—"}）
+                {session.agentIsActive === false ? " · 已停用" : session.isOnline ? "" : " · 離線"}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -412,6 +434,11 @@ function AgentManagementPanel() {
                   {agent.introduction && (
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{agent.introduction}</p>
                   )}
+                  {agent.role === "agent" && (
+                    <div className="mt-2">
+                      <AgentChatLinkCard agentId={agent.id} displayName={agent.displayName} />
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button
@@ -609,6 +636,7 @@ export default function AgentDashboard() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"chat" | "agents">("chat");
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const [filterAgentId, setFilterAgentId] = useState<number | "all">("all");
   const [inputText, setInputText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -618,7 +646,22 @@ export default function AgentDashboard() {
   const agentToken = localStorage.getItem("agent_token");
   const agentUsername = localStorage.getItem("agent_username") ?? "客服人員";
   const agentRole = localStorage.getItem("agent_role") ?? "agent";
+  const agentIdStored = Number(localStorage.getItem("agent_id") ?? "0");
   const isSuperAdmin = agentRole === "super_admin";
+
+  const sessionFilterParams = useMemo(
+    () => (isSuperAdmin && filterAgentId !== "all" ? { agentId: filterAgentId } : undefined),
+    [isSuperAdmin, filterAgentId],
+  );
+
+  const { data: adminAgents = [] } = useAdminListAgents({
+    query: { enabled: isSuperAdmin, queryKey: getAdminListAgentsQueryKey() },
+  });
+
+  const receptionAgents = useMemo(
+    () => (adminAgents as AdminAgent[]).filter((a) => a.role === "agent"),
+    [adminAgents],
+  );
 
   useEffect(() => {
     if (!agentToken) setLocation("/agent");
@@ -631,12 +674,18 @@ export default function AgentDashboard() {
     }
   }, [isSuperAdmin, activeTab]);
 
-  const { data: sessions = [], isLoading: sessionsLoading } = useListSessions({
-    query: { refetchInterval: 3000, queryKey: getListSessionsQueryKey() },
+  const { data: sessions = [], isLoading: sessionsLoading } = useQuery({
+    queryKey: getSessionsQueryKey(sessionFilterParams),
+    queryFn: () => listSessionsFiltered(sessionFilterParams),
+    refetchInterval: 3000,
+    enabled: !!agentToken,
   });
 
-  const { data: stats } = useGetSessionStats({
-    query: { refetchInterval: 5000, queryKey: getGetSessionStatsQueryKey() },
+  const { data: stats } = useQuery({
+    queryKey: getSessionStatsQueryKey(sessionFilterParams),
+    queryFn: () => getSessionStatsFiltered(sessionFilterParams),
+    refetchInterval: 5000,
+    enabled: !!agentToken,
   });
 
   const { data: history } = useGetSessionMessages(selectedSessionId ?? 0, {
@@ -649,17 +698,17 @@ export default function AgentDashboard() {
   const markRead = useMarkSessionRead();
 
   const onMessage = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetSessionStatsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getSessionsQueryKey(sessionFilterParams) });
+    queryClient.invalidateQueries({ queryKey: getSessionStatsQueryKey(sessionFilterParams) });
     if (selectedSessionId)
       queryClient.invalidateQueries({ queryKey: getGetSessionMessagesQueryKey(selectedSessionId) });
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-  }, [queryClient, selectedSessionId]);
+  }, [queryClient, selectedSessionId, sessionFilterParams]);
 
   const onSessionUpdate = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetSessionStatsQueryKey() });
-  }, [queryClient]);
+    queryClient.invalidateQueries({ queryKey: getSessionsQueryKey(sessionFilterParams) });
+    queryClient.invalidateQueries({ queryKey: getSessionStatsQueryKey(sessionFilterParams) });
+  }, [queryClient, sessionFilterParams]);
 
   const { messages, isConnected, isReconnecting, sendTextMessage, sendImageMessage, addMessages } =
     useChat({ agentToken: agentToken ?? undefined, onMessage, onSessionUpdate });
@@ -679,8 +728,8 @@ export default function AgentDashboard() {
       { id: sessionId },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetSessionStatsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getSessionsQueryKey(sessionFilterParams) });
+          queryClient.invalidateQueries({ queryKey: getSessionStatsQueryKey(sessionFilterParams) });
         },
       }
     );
@@ -695,7 +744,24 @@ export default function AgentDashboard() {
     if (!text || !selectedSessionId) return;
     sendTextMessage(text, selectedSessionId);
     setInputText("");
-    queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getSessionsQueryKey(sessionFilterParams) });
+  };
+
+  const handleExportSessions = () => {
+    const rows = sessions as SessionSummary[];
+    const header = ["会话ID", "访客名称", "所属客服", "客服ID", "状态", "在线", "未读", "最后消息", "创建时间"];
+    const lines = rows.map((s) =>
+      [s.id, s.visitorNickname, s.agentDisplayName ?? "", s.agentId ?? "", s.status, s.isOnline ? "是" : "否", s.unreadCount, (s.lastMessage ?? "").replace(/"/g, '""'), s.createdAt]
+        .map((v) => `"${String(v)}"`)
+        .join(","),
+    );
+    const blob = new Blob(["\uFEFF" + [header.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sessions-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -711,7 +777,7 @@ export default function AgentDashboard() {
     if (!file || !selectedSessionId) return;
     const url = await uploadImage(file);
     if (url) sendImageMessage(url, selectedSessionId);
-    queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getSessionsQueryKey(sessionFilterParams) });
   };
 
   const handleLogout = () => {
@@ -771,7 +837,38 @@ export default function AgentDashboard() {
           )}
         </div>
 
-        {/* Tabs — agents tab only for super_admin */}
+        {!isSuperAdmin && agentIdStored > 0 && (
+          <div className="px-4 pb-3 border-b border-border/50">
+            <AgentChatLinkCard agentId={agentIdStored} />
+          </div>
+        )}
+
+        {isSuperAdmin && activeTab === "chat" && (
+          <div className="px-4 py-2 border-b border-border/50 space-y-2">
+            <Select
+              value={filterAgentId === "all" ? "all" : String(filterAgentId)}
+              onValueChange={(v) => setFilterAgentId(v === "all" ? "all" : Number(v))}
+            >
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="按客服筛选" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部客服</SelectItem>
+                {receptionAgents.map((a) => (
+                  <SelectItem key={a.id} value={String(a.id)}>
+                    {a.displayName}（ID {a.id}）
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={handleExportSessions}>
+              <Download className="w-3.5 h-3.5" />
+              导出当前列表 CSV
+            </Button>
+          </div>
+        )}
+
+        {/* WS Status */}
         <div className="flex border-b border-border">
           <button
             onClick={() => setActiveTab("chat")}
@@ -832,6 +929,7 @@ export default function AgentDashboard() {
                   session={session}
                   isActive={session.id === selectedSessionId}
                   onClick={() => handleSelectSession(session.id)}
+                  showAgentInfo={isSuperAdmin}
                 />
               ))
             )}
@@ -876,6 +974,11 @@ export default function AgentDashboard() {
               </div>
               <div>
                 <h2 className="font-semibold text-foreground">{selectedSession?.visitorNickname ?? "訪客"}</h2>
+                {isSuperAdmin && selectedSession && (
+                  <p className="text-xs text-primary mt-0.5">
+                    所属客服：{selectedSession.agentDisplayName ?? "—"}（ID {selectedSession.agentId ?? "—"}）
+                  </p>
+                )}
                 <div className="flex items-center gap-1.5">
                   <Circle
                     className={`w-2 h-2 fill-current ${

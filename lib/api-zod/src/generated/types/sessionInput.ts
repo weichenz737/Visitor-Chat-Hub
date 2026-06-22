@@ -9,8 +9,7 @@
 export interface SessionInput {
   /** @minLength 1 */
   visitorNickname: string;
-  /** @nullable */
-  agentId?: number | null;
+  agentId: number;
   /** @nullable */
   visitorId?: string | null;
 }

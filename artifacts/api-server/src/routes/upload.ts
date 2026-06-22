@@ -4,15 +4,17 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { logger } from "../lib/logger";
+import { getStorageProvider } from "../lib/storage";
+import { isBlockedUpload, MAX_UPLOAD_BYTES, resolveMimeType } from "../lib/upload-policy";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadsDir = path.resolve(__dirname, "../uploads");
+const legacyUploadsDir = path.resolve(__dirname, "../uploads");
 
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+if (!fs.existsSync(legacyUploadsDir)) {
+  fs.mkdirSync(legacyUploadsDir, { recursive: true });
 }
 
-const ALLOWED_MIME_TYPES = new Set([
+const IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
   "image/jpg",
   "image/png",
@@ -23,8 +25,7 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/bmp",
 ]);
 
-// Extension → MIME fallback for browsers that send empty MIME (WeChat, some Android)
-const EXT_TO_MIME: Record<string, string> = {
+const EXT_TO_IMAGE_MIME: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".png": "image/png",
@@ -35,15 +36,14 @@ const EXT_TO_MIME: Record<string, string> = {
   ".bmp": "image/bmp",
 };
 
-function resolvedMime(file: Express.Multer.File): string {
-  if (file.mimetype && ALLOWED_MIME_TYPES.has(file.mimetype)) return file.mimetype;
-  // Empty or unknown MIME — try falling back to file extension
+function resolvedImageMime(file: Express.Multer.File): string {
+  if (file.mimetype && IMAGE_MIME_TYPES.has(file.mimetype)) return file.mimetype;
   const ext = path.extname(file.originalname).toLowerCase();
-  return EXT_TO_MIME[ext] ?? "";
+  return EXT_TO_IMAGE_MIME[ext] ?? "";
 }
 
-function safeExtension(file: Express.Multer.File): string {
-  const mime = resolvedMime(file);
+function safeImageExtension(file: Express.Multer.File): string {
+  const mime = resolvedImageMime(file);
   const mimeToExt: Record<string, string> = {
     "image/jpeg": ".jpg",
     "image/jpg": ".jpg",
@@ -54,41 +54,40 @@ function safeExtension(file: Express.Multer.File): string {
     "image/heif": ".heif",
     "image/bmp": ".bmp",
   };
-  const fromMime = mimeToExt[mime];
-  if (fromMime) return fromMime;
-  const orig = path.extname(file.originalname).toLowerCase();
-  return orig || ".jpg";
+  return mimeToExt[mime] || path.extname(file.originalname).toLowerCase() || ".jpg";
 }
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => { cb(null, uploadsDir); },
+const legacyImageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, legacyUploadsDir);
+  },
   filename: (_req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = safeExtension(file);
-    cb(null, `img-${uniqueSuffix}${ext}`);
+    cb(null, `img-${uniqueSuffix}${safeImageExtension(file)}`);
   },
 });
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 20 * 1024 * 1024 },
+const legacyImageUpload = multer({
+  storage: legacyImageStorage,
+  limits: { fileSize: MAX_UPLOAD_BYTES },
   fileFilter: (_req, file, cb) => {
-    const mime = resolvedMime(file);
-    if (mime) {
+    if (resolvedImageMime(file)) {
       cb(null, true);
     } else {
-      logger.warn({ originalname: file.originalname, mimetype: file.mimetype }, "Rejected upload: unresolvable MIME type");
-      cb(new Error(`不支援的圖片格式。請使用 JPG、PNG、WebP 或 GIF`));
+      cb(new Error("不支援的圖片格式。請使用 JPG、PNG、WebP 或 GIF"));
     }
   },
 });
 
+const memoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES },
+});
+
 const router: IRouter = Router();
 
-// Legacy multipart endpoint — kept for backward compat with old local-disk uploads.
-// New uploads should use POST /api/storage/uploads/request-url (presigned GCS).
 router.post("/upload/image", (req, res): void => {
-  upload.single("file")(req, res, (err) => {
+  legacyImageUpload.single("file")(req, res, (err) => {
     if (err) {
       if (err instanceof multer.MulterError) {
         if (err.code === "LIMIT_FILE_SIZE") {
@@ -111,6 +110,52 @@ router.post("/upload/image", (req, res): void => {
     const url = `/uploads/${filename}`;
     logger.info({ filename, mimetype: req.file.mimetype }, "Image uploaded (legacy local storage)");
     res.json({ url, filename });
+  });
+});
+
+router.post("/upload/file", (req, res): void => {
+  memoryUpload.single("file")(req, res, async (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          res.status(400).json({ error: "文件太大，最大允许 20MB" });
+        } else {
+          res.status(400).json({ error: `上传错误：${err.message}` });
+        }
+        return;
+      }
+      res.status(400).json({ error: err.message || "文件上传失败" });
+      return;
+    }
+
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: "未收到文件" });
+      return;
+    }
+
+    const originalName = file.originalname || "file";
+    const mimeType = resolveMimeType(originalName, file.mimetype);
+    if (isBlockedUpload(originalName, mimeType)) {
+      res.status(400).json({ error: "不支持该文件类型" });
+      return;
+    }
+
+    try {
+      const storage = getStorageProvider();
+      const withMime = { ...file, mimetype: mimeType || file.mimetype };
+      const result = await storage.uploadFile(withMime);
+      res.json({
+        url: result.url,
+        fileName: result.fileName,
+        fileSize: result.fileSize,
+        mimeType: result.mimeType,
+        storageKey: result.storageKey,
+      });
+    } catch (uploadErr) {
+      logger.error({ err: uploadErr }, "File upload failed");
+      res.status(500).json({ error: "文件上传失败" });
+    }
   });
 });
 

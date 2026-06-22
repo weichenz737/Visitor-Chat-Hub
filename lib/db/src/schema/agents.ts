@@ -11,6 +11,7 @@ export const agentsTable = pgTable("agents", {
   avatarUrl: text("avatar_url"),
   introduction: text("introduction"),
   isActive: boolean("is_active").notNull().default(true),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
